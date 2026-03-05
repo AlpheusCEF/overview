@@ -87,9 +87,28 @@ Optional fields provide graph edges and extensibility:
 
 | Field | Description |
 |-------|-------------|
+| `status` | Query visibility: `active` (default), `archived`, or `suppressed` (see below) |
 | `related_to` | List of node/pool references (see cross-referencing below) |
-| `tags` | Semantic labels (decision, concern, requirement) |
+| `tags` | Semantic labels (decision, concern, requirement, open, closed, in-progress) |
 | `meta` | Source-specific key-value pairs (url, doc_id, provider, cost, mileage, resolves_to) |
+
+### Node Status
+
+`status` is a first-class field because it affects **query behavior** — inclusion/exclusion — not just labeling. That is the line between `status` and `tags`: tags are for categorization, `status` is for system behavior.
+
+| Value | Default queries | With `-s` / `--status` | Meaning |
+|-------|----------------|------------------------|---------|
+| `active` (or absent) | included | included | Normal, in active rotation |
+| `archived` | excluded | included | No longer relevant — keep for history, rarely surface |
+| `suppressed` | excluded | included | Still relevant but noisy — like `--verbose` content |
+
+`active` is the implicit default. Omitting `status` from frontmatter is equivalent to `status: active`. Declaring it explicitly is valid and improves clarity in automated or bulk-created nodes.
+
+The `-s` / `--status` flag on `alph list` (and other query commands) expands the result set beyond active. It accepts one or more values — `archived`, `suppressed`, or `all` (include every node regardless of status). Without the flag, only `active` nodes are returned.
+
+**Tags vs. status — the distinction in practice:**
+
+Tags like `open`, `closed`, `in-progress`, `blocked` are domain categorization of work state — they affect how humans and LLMs *interpret* a node, but not whether the system *surfaces* it. A closed repair record is still active context history you want in default queries. `archived` is what you set when the entire node is no longer relevant to any context. A node can be `tags: [closed]` and `status: active` simultaneously — closed work, still relevant history.
 
 Content below the frontmatter `---` separator is free-form Markdown. Fixed nodes typically have substantial content; live nodes typically have minimal or no content below the frontmatter.
 
@@ -169,7 +188,7 @@ Registries are declared in the alph config file alongside other settings at the 
 | `alph registry init` | | Create a registry, validate, show what was created |
 | `alph pool init --name <name>` | | Create a pool, register it, validate, show defaults |
 | `alph add -c "context text"` | `alph a -c "text"` | Create a node (auto-commits if configured) |
-| `alph list` | `alph l` | List nodes in a pool with frontmatter |
+| `alph list [-s archived\|suppressed\|all]` | `alph l` | List nodes; default active only, `-s` expands |
 | `alph show <id-or-context>` | `alph s <id>` | Display full node formatted for terminal |
 | `alph validate` | | Check nodes against schema + registry against registry schema |
 
@@ -222,6 +241,7 @@ Python 3.12+, Poetry for dependency management, FastMCP 3.x for the MCP server l
 - Auto-commit on add (opt-in via config, no auto-pull/push)
 - Validator checks both nodes and registry
 - `alph list` and `alph show` for human inspection
+- `status` field (`active`/`archived`/`suppressed`) as first-class for query behavior; tags for categorization only; `-s`/`--status` flag to expand beyond active
 - BDD/TDD development with pytest, type hints, immutable patterns
 
 ### Prior Art Considered
