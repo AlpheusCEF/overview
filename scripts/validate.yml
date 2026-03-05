@@ -1,0 +1,25 @@
+# .github/workflows/validate.yml
+# STATUS: PRE-DECISION PROTOTYPE - uses Python 3.11 (should be 3.12+),
+# references old validate_nodes.py which uses `body` instead of `context`.
+#
+# Copy this to your context repo's .github/workflows/ directory.
+# Validates all context nodes on every push and PR.
+name: Validate Context Nodes
+on: [push, pull_request]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: pip install PyYAML jsonschema
+
+      - name: Run Validator
+        run: python validate_nodes.py

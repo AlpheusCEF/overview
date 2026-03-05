@@ -1,0 +1,61 @@
+# AlpheusCEF Pool Registry
+#
+# STATUS: PRE-DECISION PROTOTYPE (superseded by STATE.md)
+# Uses `description` instead of `context` on pools/registry.
+# Missing registry `id` field. Standalone file format -- current design
+# places registry declarations in alph config file instead.
+#
+# This file is the entry point for discovering context pools.
+# Place it at the root of a context repo or in ~/.config/alph/registry.yaml
+# for a global registry that spans multiple repos.
+#
+# Two layout modes:
+#   subdirectory - pools are subdirectories within this repo
+#   repo         - each pool is a separate Git repo
+#
+# These can be mixed: a single registry can point to local subdirectories
+# AND remote repos.
+
+version: "1"
+
+# Registry-level metadata
+registry:
+  name: "chase-context"
+  description: "Personal and work context pools"
+
+# Pool definitions
+pools:
+
+  # --- Subdirectory mode: pools live as folders in this repo ---
+  highlander:
+    layout: subdirectory
+    path: "./highlander"
+    description: "Maintenance, repairs, and mods for the Highlander"
+    tags: [personal, vehicle]
+
+  solar-project:
+    layout: subdirectory
+    path: "./solar-project"
+    description: "Roof rack solar panel research and install"
+    tags: [personal, project]
+
+  # --- Repo mode: each pool is its own Git repo ---
+  sdr-q1-2026:
+    layout: repo
+    repo: "git@github.com:company/sdr-q1-2026-context.git"
+    description: "Security design review Q1 2026"
+    tags: [work, security, epic]
+
+  auth-modernization:
+    layout: repo
+    repo: "git@github.com:company/auth-modernization-context.git"
+    description: "Authentication service migration"
+    tags: [work, security, epic]
+
+  # --- Standards pool: cross-cutting, referenced by other pools ---
+  standards:
+    layout: subdirectory
+    path: "./standards"
+    description: "Cross-cutting decisions, compliance requirements, frameworks"
+    tags: [work, standards, cross-cutting]
+    cross_cutting: true
