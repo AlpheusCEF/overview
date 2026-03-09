@@ -54,9 +54,8 @@ mkdir -p /tmp/alph-test
 
 ```bash
 # --home: the directory where pool subdirectories will be created.
-#         A config.yaml with registry metadata is written here.
-#         The registry is also registered in ~/.config/alph/config.yaml
-#         so all alph commands can find it by ID without explicit paths.
+#         No config.yaml is written here — the registry definition
+#         (id, home path, context, name) goes into ~/.config/alph/config.yaml.
 # --id:   machine-readable identifier used everywhere.
 # --name: optional human-readable label.
 alph registry init \
@@ -70,9 +69,11 @@ Expected output (first registry — no default exists yet):
 ```
 registry created: test-household
   home:   /tmp/alph-test/registry
-  config: ~/.config/alph/config.yaml
+  config: /Users/<you>/.config/alph/config.yaml
   set as default registry
 ```
+
+Note: `config:` shows the full expanded path, not `~`.
 
 Note: no `config.yaml` is written inside `/tmp/alph-test/registry`. The registry
 definition (id, home path, context, name) lives entirely in `~/.config/alph/config.yaml`.
@@ -92,7 +93,7 @@ registries:
     name: Test Household
 ```
 
-### 2b. Inspect what registries alph knows about
+### 2c. Inspect what registries alph knows about
 
 ```bash
 alph registry list
@@ -101,7 +102,7 @@ alph registry list
 Expected: a table with `test-household`, `Test Household`, the context text,
 and the home directory path.
 
-### 2c. Create a pool inside the registry
+### 2d. Create a pool inside the registry
 
 ```bash
 # pool init takes a registry ID (or name), not a path.
@@ -119,7 +120,7 @@ Expected output:
 pool created: vehicles
   registry: test-household
   path:     /tmp/alph-test/registry/vehicles
-  config:   ~/.config/alph/config.yaml
+  config:   /Users/<you>/.config/alph/config.yaml
 ```
 
 ```bash
@@ -128,7 +129,7 @@ ls /tmp/alph-test/registry/vehicles/
 # Expected: snapshots/  pointers/  .alph/
 ```
 
-### 2d. Error behavior — unknown registry
+### 2e. Error behavior — unknown registry
 
 ```bash
 # Try to create a pool in a registry that doesn't exist.
@@ -222,17 +223,33 @@ alph show $NODE_ID --pool $POOL
 
 Expected: full node display with `id`, `context`, `type`, `source`, `creator`, `timestamp`.
 
+```bash
+# Short aliases — hidden from --help but fully functional
+alph l --pool $POOL          # same as alph list
+alph s $NODE_ID --pool $POOL # same as alph show
+```
+
+Expected: same output as the full command forms.
+
+```bash
+# --verbose / -v works on subcommands directly
+alph list --pool $POOL -v
+```
+
+Expected: same table output preceded by DEBUG log lines showing config load and pool resolution.
+
 ---
 
 ## 5. CLI — Config Defaults (optional but recommended for daily use)
 
 Setting defaults means you can omit `--pool` and `--creator` on every command.
-This is what `default_registry` (already written to the registry config) enables
-— but you also need `default_pool` and a registered path for the pool resolution
-to work end-to-end.
+`alph registry init` already wrote `default_registry` and `alph pool init` already
+wrote `default_pool`. The one thing still missing is `creator`. This step rewrites
+the config to add it (overwriting the auto-generated content with an equivalent
+plus the `creator` field).
 
 ```bash
-# Write a global alph config
+# Write a global alph config (adds creator; equivalent registry/pool entries)
 mkdir -p ~/.config/alph
 cat > ~/.config/alph/config.yaml << 'EOF'
 creator: test@example.com
@@ -304,6 +321,13 @@ alph validate --pool /tmp/alph-test/registry/vehicles
 Expected: `all nodes valid.`
 
 ```bash
+# --verbose works on validate too
+alph validate --pool /tmp/alph-test/registry/vehicles -v
+```
+
+Expected: same `all nodes valid.` result, preceded by DEBUG log lines.
+
+```bash
 # Corrupt a node manually to test failure detection
 SNAP=$(ls /tmp/alph-test/registry/vehicles/snapshots/*.md | head -1)
 # Remove the schema_version line from frontmatter
@@ -316,9 +340,17 @@ Expected: `invalid: <filename>: missing required field: 'schema_version'`
 ```bash
 # Restore by reinserting the line (or just re-add the node)
 # Quick fix: re-seed the whole thing
-rm -rf /tmp/alph-test && mkdir /tmp/alph-test
+rm -rf /tmp/alph-test
 # (re-run the init and add steps above if you want a clean pool)
 ```
+
+```bash
+# Validate on a pool directory that no longer exists
+alph validate --pool /tmp/alph-test/registry/vehicles
+```
+
+Expected: `error: pool directory not found: /tmp/alph-test/registry/vehicles`
+NOT "all nodes valid." — an empty or missing pool is reported honestly.
 
 ---
 
@@ -468,14 +500,19 @@ will automatically update the formula in homebrew-tap via the release workflow.
 - [ ] `brew install alph` works cleanly
 - [ ] Both `alph` and `alph-mcp` binaries in PATH
 - [ ] `alph --help` shows: `add`, `list`, `show`, `validate`, `registry`, `pool`, `config`
-- [ ] `alph registry init` sets default when no default exists; reports it clearly
-- [ ] `alph registry list` shows registry ID, name, context, config path
-- [ ] `alph pool init --registry <id>` finds registry by walking up from `--cwd`
+- [ ] `alph registry init` sets default when no default exists; reports full expanded config path
+- [ ] `alph registry list` shows registry ID, name, context, home path
+- [ ] `alph pool init --registry <id>` finds registry from global config by ID
 - [ ] `alph pool init --registry ghost` errors and shows known registries
-- [ ] `alph add` deduplicates correctly
+- [ ] `alph add` deduplicates correctly (same context → "duplicate: node already exists")
 - [ ] `alph list` default shows active only; `-s archived` expands
+- [ ] `alph list --pool vehicles` resolves pool by name from registry config
 - [ ] `alph show` displays all fields including `related:`
 - [ ] `alph validate` catches schema violations
+- [ ] `alph validate` on missing pool directory errors (not "all nodes valid.")
+- [ ] `alph validate` on empty pool prints "no nodes found." (not "all nodes valid.")
+- [ ] Short aliases work: `alph l`, `alph a`, `alph s`, `alph v`
+- [ ] Per-command `-v`/`--verbose` flag works: `alph list -v`, `alph validate -v`
 - [ ] Config defaults (`default_registry`, `default_pool`, `creator`) resolve correctly
 - [ ] `alph add` / `alph list` work without `--pool` / `--creator` when config set
 - [ ] `alph config list` shows config discovery tree with exists/missing status
