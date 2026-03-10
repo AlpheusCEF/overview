@@ -388,7 +388,7 @@ rm -rf /tmp/alph-test
 alph validate --pool /tmp/alph-test/registry/vehicles
 ```
 
-Expected: `error: pool directory not found: /tmp/alph-test/registry/vehicles`
+Expected: `error: pool not found: /tmp/alph-test/registry/vehicles`
 Not `N nodes ... valid.` — a missing pool is an error, not a valid result.
 
 ---
