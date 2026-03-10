@@ -44,7 +44,7 @@ alph --help
 alph -h
 ```
 
-Expected: help shows top-level commands: `add`, `list`, `show`, `validate`, `registry`, `pool`, `config`.
+Expected: help shows top-level commands: `add`, `list`, `show`, `validate`, `registry`, `pool`, `config`, `defaults`.
 Both `--help` and `-h` should work.
 
 ---
@@ -132,8 +132,8 @@ Expected: `snapshots/  live/`
 alph pool list
 ```
 
-Expected: a table with `vehicles`, type `subdir`, the context text, and the full path.
-(Uses default registry from config.)
+Expected: a table with `test-household`, `vehicles`, type `subdir`, the context text, and the full path.
+The registry column appears first. (Uses default registry from config.)
 
 ### 2f. Error behavior — unknown registry
 
@@ -203,7 +203,7 @@ Expected: `node created: <id>`
 alph list --pool /tmp/alph-test/registry/vehicles
 ```
 
-Expected: 2 rows — the fixed purchase node and the live 10k-service node.
+Expected: 2 rows — the snapshot purchase node and the live 10k-service node.
 The wiper blade node (status: archived) is NOT shown.
 
 ```bash
@@ -229,6 +229,18 @@ alph list --pool /tmp/alph-test/registry/vehicles -v
 ```
 
 Expected: same table output preceded by DEBUG log lines showing config load and pool resolution.
+
+```bash
+alph list --pool /tmp/alph-test/registry/vehicles -o json
+```
+
+Expected: a JSON array of node objects. No rich table, no header.
+
+```bash
+alph list --pool /tmp/alph-test/registry/vehicles -o csv
+```
+
+Expected: a CSV with a header row followed by one row per active node.
 
 For the next two commands, copy an ID from the list output above and substitute it:
 
@@ -279,7 +291,7 @@ alph add -c "Oil change at Valvoline, 10,200 miles, full synthetic 0W-20."
 Expected: `node created: <id>`. No `--pool` or `--creator` needed.
 
 What alph resolved: `default_registry=test-household` →
-`registries[test-household].home=/tmp/alph-test/registry` →
+`registries[test-household].pool_home=/tmp/alph-test/registry` →
 `default_pool=vehicles` → pool = `/tmp/alph-test/registry/vehicles`.
 
 ```bash
@@ -521,16 +533,17 @@ will automatically update the formula in homebrew-tap via the release workflow.
 
 - [ ] `brew install alph` works cleanly
 - [ ] Both `alph` and `alph-mcp` binaries in PATH
-- [ ] `alph --help` shows: `add`, `list`, `show`, `validate`, `registry`, `pool`, `config`
+- [ ] `alph --help` shows: `add`, `list`, `show`, `validate`, `registry`, `pool`, `config`, `defaults`
 - [ ] `alph registry init` sets default when no default exists; reports full expanded pool home and config path
-- [ ] `alph registry list` shows registry ID, name, context, home path
+- [ ] `alph registry list` shows registry ID, name, context, pool home path
 - [ ] `alph pool init --registry <id>` finds registry from global config by ID
 - [ ] `alph pool init --registry ghost` errors and shows known registries
-- [ ] `alph pool list` lists pools in the default registry with name, type, context, path
+- [ ] `alph pool list` lists pools in the default registry with registry, name, type, context, path
 - [ ] `alph pool list --registry <id>` lists pools in the specified registry
 - [ ] `alph add` deduplicates correctly (same context → "duplicate: node already exists")
 - [ ] `alph add` with `$` in context: use single quotes to prevent bash expansion
 - [ ] `alph list` default shows active only; `-s archived` shows only archived (exclusive); `-s all` shows everything; `-s foo,bar` comma-separation works
+- [ ] `alph list -o json` outputs JSON array; `-o csv` outputs CSV with header row
 - [ ] `alph list --pool vehicles` resolves pool by name from registry config
 - [ ] `alph show` displays all fields including `related:`
 - [ ] `alph validate` catches schema violations
