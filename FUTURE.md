@@ -6,11 +6,13 @@ Where the problem goes as it evolves, and where AlpheusCEF might need to follow.
 
 ## The Near Horizon (Things we know we need)
 
+### Unregistered Pool Notice
+
+When a user runs `alph add --pool /some/path` or `alph list --pool /some/path` against a pool that is not tracked in any registry, alph should print a notice: `notice: pool at /some/path is not registered in any registry`. The notice is informational, not an error — the command still runs. Default behavior: notice enabled (`true`). Suppressible via config key `unregistered_pool_notice: false`.
+
 ### Pool-Local State Directory (`.alph/`)
 
 A reserved `.alph/` directory inside each pool is a natural place for pool-local state that should not be committed as nodes — e.g. a last-loaded timestamp, a local resolution cache for live nodes, or a per-machine config override. Nothing is written there yet. Before adding it back, nail down at least one concrete use case so the directory has a reason to exist on day one.
-
-
 
 ### Pool Interconnection
 

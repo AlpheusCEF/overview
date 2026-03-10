@@ -466,18 +466,13 @@ Expected: process appears in the list.
 pkill -f alph-mcp
 ```
 
-For a proper MCP test, configure Claude Code to use the server:
+For a proper MCP test, register the server with Claude Code:
 
-**`~/.claude.json`** (or Claude Desktop config):
-```json
-{
-  "mcpServers": {
-    "alph": {
-      "command": "alph-mcp"
-    }
-  }
-}
+```bash
+claude mcp add --scope user alph -- alph-mcp
 ```
+
+Expected: confirms the MCP server was added. This writes to `~/.claude.json`.
 
 Then open a Claude Code session and ask:
 > "Using alph MCP tools, list all nodes in the pool at /Users/cpettet/git/chasemp/AlpheusCEF/multi-pool-repo-example/registry/remodeling"
@@ -568,5 +563,6 @@ will automatically update the formula in homebrew-tap via the release workflow.
 - [ ] Demo registry seeds 28 nodes cleanly
 - [ ] Cross-pool `related:` field renders correctly on show
 - [ ] `alph-mcp` starts without error
+- [ ] `claude mcp add --scope user alph -- alph-mcp` registers the server
 - [ ] MCP tools callable from Claude Code session
 - [ ] CI green on GitHub Actions
