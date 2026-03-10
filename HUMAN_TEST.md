@@ -420,17 +420,17 @@ alph list --pool /Users/cpettet/git/chasemp/AlpheusCEF/multi-pool-repo-example/r
 Expected: tables showing nodes. Remodeling has 10 (includes the 2025 capital plan node).
 
 ```bash
-alph show 9eb6b033c1de --pool /Users/cpettet/git/chasemp/AlpheusCEF/multi-pool-repo-example/registry/remodeling
+alph show d133ae8da4be --pool /Users/cpettet/git/chasemp/AlpheusCEF/multi-pool-repo-example/registry/remodeling
 ```
 
-Expected: node with `related: appliances::a76746c51d46, 3f9a51c99832`
+Expected: node with `related: appliances::b2d4bc365387, 9fd88fff72f8`
 This demonstrates the cross-pool `pool_name::node_id` format.
 
 ```bash
-alph show 5d4e71fbe603 --pool /Users/cpettet/git/chasemp/AlpheusCEF/multi-pool-repo-example/registry/vehicles
+alph show 396a97378477 --pool /Users/cpettet/git/chasemp/AlpheusCEF/multi-pool-repo-example/registry/vehicles
 ```
 
-Expected: `related: 2079032c3079`
+Expected: `related: b4344a31f5ef`
 
 ```bash
 alph validate --pool /Users/cpettet/git/chasemp/AlpheusCEF/multi-pool-repo-example/registry/vehicles
