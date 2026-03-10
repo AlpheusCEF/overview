@@ -6,7 +6,7 @@ Uses `body` instead of `context`, missing `schema_version`/`creator`/`tags`
 in required fields. New validator must also check registry structure.
 Will be replaced by validator in core.py.
 
-Validates all context nodes in snapshots/ and pointers/ against the
+Validates all context nodes in snapshots/ and live/ against the
 core JSON Schema. Run locally or as a GitHub Action.
 """
 
@@ -24,7 +24,7 @@ SCHEMA = {
         "id": {"type": "string", "pattern": "^[a-f0-9]{12}$"},
         "timestamp": {"type": "string", "format": "date-time"},
         "source": {"type": "string"},
-        "node_type": {"enum": ["fixed", "live"]},
+        "node_type": {"enum": ["snapshot", "live"]},
         "body": {"type": "string", "minLength": 10},
         "related_to": {"type": "array", "items": {"type": "string"}},
         "tags": {"type": "array", "items": {"type": "string"}},
@@ -33,7 +33,7 @@ SCHEMA = {
     "required": ["id", "timestamp", "source", "node_type", "body"],
 }
 
-TARGET_DIRS = ["snapshots", "pointers"]
+TARGET_DIRS = ["snapshots", "live"]
 
 
 def extract_frontmatter(text):

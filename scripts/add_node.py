@@ -10,7 +10,7 @@ decisions were made. Key differences from current spec:
   - No idempotency check
 Will be replaced by core.py + cli.py in implementation.
 
-Creates fixed or live context nodes as Markdown files with YAML frontmatter
+Creates snapshot or live context nodes as Markdown files with YAML frontmatter
 in a local Git repository.
 """
 
@@ -41,7 +41,7 @@ def create_node(repo_path, source, node_type, body, content="", tags=None, relat
     if meta:
         frontmatter["meta"] = meta
 
-    folder = "snapshots" if node_type == "fixed" else "pointers"
+    folder = "snapshots" if node_type == "snapshot" else "live"
     file_path = Path(repo_path) / folder / f"{datetime.date.today()}-{node_id}.md"
     file_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -58,7 +58,7 @@ def main():
     parser = argparse.ArgumentParser(description="Create an AlpheusCEF context node")
     parser.add_argument("--repo", required=True, help="Path to the context repo")
     parser.add_argument("--source", required=True, help="Originating system (cli, slack, google_docs, etc)")
-    parser.add_argument("--type", required=True, choices=["fixed", "live"], dest="node_type", help="Node type")
+    parser.add_argument("--type", required=True, choices=["snapshot", "live"], dest="node_type", help="Node type")
     parser.add_argument("--body", required=True, help="Summary / description of the node")
     parser.add_argument("--content", default="", help="Full content body (for fixed nodes)")
     parser.add_argument("--tags", nargs="*", help="Semantic tags (decision, concern, requirement)")

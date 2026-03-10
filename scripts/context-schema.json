@@ -19,8 +19,8 @@
       "description": "Originating system (cli, slack, google_docs, etc)"
     },
     "node_type": {
-      "enum": ["fixed", "live"],
-      "description": "fixed = snapshot, live = pointer needing resolution"
+      "enum": ["snapshot", "live"],
+      "description": "snapshot = immutable record, live = pointer needing resolution"
     },
     "body": {
       "type": "string",

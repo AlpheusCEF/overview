@@ -2,19 +2,21 @@
 
 Walk through this top to bottom. Each section is a checkpoint — verify the
 expected output before moving on. Commands assume a clean macOS environment.
+Every code block is written to be copy-pasted independently.
 
 ---
 
 ## Prerequisites
 
 ```bash
-# Verify Homebrew is installed
 brew --version
+```
 
-# Verify Python 3.12+ is available (for pip fallback)
+```bash
 python3 --version
+```
 
-# Verify gh CLI is installed and authed (for GitHub checks)
+```bash
 gh auth status
 ```
 
@@ -30,10 +32,15 @@ brew install alph
 Expected: no errors, formula installs into a virtualenv under Cellar.
 
 ```bash
-# Verify both entry points installed
 which alph
 which alph-mcp
+```
+
+```bash
 alph --help
+```
+
+```bash
 alph -h
 ```
 
@@ -53,42 +60,36 @@ mkdir -p /tmp/alph-test
 ### 2b. Create a registry
 
 ```bash
-# --home: the directory where pool subdirectories will be created.
-#         No config.yaml is written here — the registry definition
-#         (id, home path, context, name) goes into ~/.config/alph/config.yaml.
-# --id:   machine-readable identifier used everywhere.
-# --name: optional human-readable label.
 alph registry init \
-  --home /tmp/alph-test/registry \
+  --pool-home /tmp/alph-test/registry \
   --id test-household \
   --context "Scratch registry for human test run." \
   --name "Test Household"
 ```
 
-Expected output (first registry — no default exists yet):
+Expected (first registry — no default exists yet):
 ```
 registry created: test-household
-  home:   /tmp/alph-test/registry
+  pool home: /tmp/alph-test/registry
   config: /Users/<you>/.config/alph/config.yaml
   set as default registry
 ```
 
-Note: `config:` shows the full expanded path, not `~`.
-
-Note: no `config.yaml` is written inside `/tmp/alph-test/registry`. The registry
-definition (id, home path, context, name) lives entirely in `~/.config/alph/config.yaml`.
+Notes:
+- `config:` shows the full expanded path, not `~`
+- No `config.yaml` is written inside `/tmp/alph-test/registry` — the registry
+  definition (id, pool home path, context, name) lives entirely in `~/.config/alph/config.yaml`
 
 ```bash
-# Inspect the global config — this is the single source of truth
 cat ~/.config/alph/config.yaml
 ```
 
-The global config now has:
+Expected:
 ```yaml
 default_registry: test-household
 registries:
   test-household:
-    home: /tmp/alph-test/registry
+    pool_home: /tmp/alph-test/registry
     context: Scratch registry for human test run.
     name: Test Household
 ```
@@ -100,22 +101,18 @@ alph registry list
 ```
 
 Expected: a table with `test-household`, `Test Household`, the context text,
-and the home directory path.
+and the pool home directory path.
 
 ### 2d. Create a pool inside the registry
 
 ```bash
-# pool init takes a registry ID (or name), not a path.
-# alph resolves the registry from the global config by ID.
-# The pool will be created as a subdirectory of the registry home:
-#   /tmp/alph-test/registry/vehicles/
 alph pool init \
   --registry test-household \
   --name vehicles \
   --context "Vehicle maintenance and purchase records."
 ```
 
-Expected output:
+Expected:
 ```
 pool created: vehicles
   registry: test-household
@@ -124,16 +121,23 @@ pool created: vehicles
 ```
 
 ```bash
-# Verify the structure
 ls /tmp/alph-test/registry/vehicles/
-# Expected: snapshots/  pointers/  .alph/
 ```
 
-### 2e. Error behavior — unknown registry
+Expected: `snapshots/  live/`
+
+### 2e. List pools in the registry
 
 ```bash
-# Try to create a pool in a registry that doesn't exist.
-# alph should error and show you what registries ARE known.
+alph pool list
+```
+
+Expected: a table with `vehicles`, type `subdir`, the context text, and the full path.
+(Uses default registry from config.)
+
+### 2f. Error behavior — unknown registry
+
+```bash
 alph pool init \
   --registry ghost-registry \
   --name demo \
@@ -147,47 +151,44 @@ of known registries (test-household should appear).
 
 ## 3. CLI — Add Nodes
 
-The `--pool` flag is always explicit here to make the target clear. After
-section 5 (config defaults), you will see how to omit it.
+The `--pool` flag is explicit throughout this section. After section 5
+(config defaults), you will see how to omit it.
 
 ```bash
-POOL=/tmp/alph-test/registry/vehicles
-
-# Add a fixed node (snapshot — immutable record)
 alph add \
-  --pool $POOL \
-  --context "Purchased 2022 Subaru Outback Wilderness, $38,200. VIN: 4S4BTGND7N3123456." \
+  --pool /tmp/alph-test/registry/vehicles \
+  --context 'Purchased 2022 Subaru Outback Wilderness, $38,200. VIN: 4S4BTGND7N3123456.' \
   --creator test@example.com
 ```
 
 Expected: `node created: <12-char-id>` + `path: .../snapshots/<id>.md`
 
+Note: use single quotes around the context string when it contains `$` amounts —
+double quotes cause bash to expand `$38` as a variable (to empty).
+
 ```bash
-# Add it again — should deduplicate
 alph add \
-  --pool $POOL \
-  --context "Purchased 2022 Subaru Outback Wilderness, $38,200. VIN: 4S4BTGND7N3123456." \
+  --pool /tmp/alph-test/registry/vehicles \
+  --context 'Purchased 2022 Subaru Outback Wilderness, $38,200. VIN: 4S4BTGND7N3123456.' \
   --creator test@example.com
 ```
 
 Expected: `duplicate: node already exists (created by test@example.com)`
 
 ```bash
-# Add a live node (pointer — references something that changes)
 alph add \
-  --pool $POOL \
+  --pool /tmp/alph-test/registry/vehicles \
   --context "Outback due for 10k service — oil change, tire rotation, multi-point inspection." \
   --creator test@example.com \
   --type live
 ```
 
-Expected: `node created: <different-id>` + path ends in `pointers/`
+Expected: `node created: <different-id>` + path ends in `live/`
 
 ```bash
-# Add a node with archived status (historical, excluded from default list)
 alph add \
-  --pool $POOL \
-  --context "Replaced wiper blades, passenger side was streaking badly. $22 at AutoZone." \
+  --pool /tmp/alph-test/registry/vehicles \
+  --context 'Replaced wiper blades, passenger side was streaking badly. $22 at AutoZone.' \
   --creator test@example.com \
   --status archived
 ```
@@ -199,57 +200,65 @@ Expected: `node created: <id>`
 ## 4. CLI — List and Show
 
 ```bash
-POOL=/tmp/alph-test/registry/vehicles
-
-# Default: active nodes only (archived is excluded)
-alph list --pool $POOL
+alph list --pool /tmp/alph-test/registry/vehicles
 ```
 
 Expected: 2 rows — the fixed purchase node and the live 10k-service node.
 The wiper blade node (status: archived) is NOT shown.
 
 ```bash
-# Expand to include archived nodes
-alph list --pool $POOL -s archived
+alph list --pool /tmp/alph-test/registry/vehicles -s archived
 ```
 
-Expected: 3 rows — adds the archived wiper blade node with status column showing `archived`.
+Expected: 1 row — only the archived wiper blade node. Active nodes are NOT shown.
 
 ```bash
-# Show a specific node — copy an ID from the list output
-NODE_ID=<paste-id-from-list>
-alph show $NODE_ID --pool $POOL
+alph list --pool /tmp/alph-test/registry/vehicles -s archived,suppressed
+```
+
+Expected: same 1 row (no suppressed nodes exist yet). Demonstrates comma-separated filter.
+
+```bash
+alph list --pool /tmp/alph-test/registry/vehicles -s all
+```
+
+Expected: 3 rows — all nodes regardless of status.
+
+```bash
+alph list --pool /tmp/alph-test/registry/vehicles -v
+```
+
+Expected: same table output preceded by DEBUG log lines showing config load and pool resolution.
+
+For the next two commands, copy an ID from the list output above and substitute it:
+
+```bash
+alph show <paste-id-here> --pool /tmp/alph-test/registry/vehicles
 ```
 
 Expected: full node display with `id`, `context`, `type`, `source`, `creator`, `timestamp`.
 
 ```bash
-# Short aliases — hidden from --help but fully functional
-alph l --pool $POOL          # same as alph list
-alph s $NODE_ID --pool $POOL # same as alph show
+alph l --pool /tmp/alph-test/registry/vehicles
 ```
 
-Expected: same output as the full command forms.
+Expected: same output as `alph list` (short alias).
 
 ```bash
-# --verbose / -v works on subcommands directly
-alph list --pool $POOL -v
+alph s <paste-id-here> --pool /tmp/alph-test/registry/vehicles
 ```
 
-Expected: same table output preceded by DEBUG log lines showing config load and pool resolution.
+Expected: same output as `alph show` (short alias).
 
 ---
 
 ## 5. CLI — Config Defaults (optional but recommended for daily use)
 
-Setting defaults means you can omit `--pool` and `--creator` on every command.
 `alph registry init` already wrote `default_registry` and `alph pool init` already
-wrote `default_pool`. The one thing still missing is `creator`. This step rewrites
-the config to add it (overwriting the auto-generated content with an equivalent
-plus the `creator` field).
+wrote `default_pool`. The missing piece for daily use is `creator`. This step
+adds `creator` to the config, preserving the existing registry and pool entries.
 
 ```bash
-# Write a global alph config (adds creator; equivalent registry/pool entries)
 mkdir -p ~/.config/alph
 cat > ~/.config/alph/config.yaml << 'EOF'
 creator: test@example.com
@@ -257,26 +266,23 @@ default_registry: test-household
 default_pool: vehicles
 registries:
   test-household:
-    home: /tmp/alph-test/registry
+    pool_home: /tmp/alph-test/registry
     context: Scratch registry for human test run.
     name: Test Household
 EOF
 ```
 
 ```bash
-# Now add without --pool or --creator
 alph add -c "Oil change at Valvoline, 10,200 miles, full synthetic 0W-20."
 ```
 
-Expected: `node created: <id>`. No --pool needed — resolved via
-`registries[default_registry].home / default_pool`.
+Expected: `node created: <id>`. No `--pool` or `--creator` needed.
 
-What alph is doing: `~/.config/alph/config.yaml` → `default_registry=test-household`
-→ `registries[test-household].home=/tmp/alph-test/registry` → `default_pool=vehicles`
-→ pool = `/tmp/alph-test/registry/vehicles`. Everything is in one config file.
+What alph resolved: `default_registry=test-household` →
+`registries[test-household].home=/tmp/alph-test/registry` →
+`default_pool=vehicles` → pool = `/tmp/alph-test/registry/vehicles`.
 
 ```bash
-# List without --pool
 alph list
 ```
 
@@ -287,28 +293,33 @@ Expected: table including the Valvoline oil change node.
 ## 6. CLI — Config Discovery
 
 ```bash
-# List all config files alph checks when loading config (global + walk up from cwd)
 alph config list
 ```
 
-Expected: a table with at least two rows — the global `~/.config/alph/config.yaml` (marked
-`global`, `exists`) and any local `config.yaml` files found walking up from the current
-directory. The footer explains merge order (global first, most specific wins).
+Expected: a table with at least two rows — the global `~/.config/alph/config.yaml`
+(marked `global`, `exists`) and any local `config.yaml` files found walking up from
+the current directory. Footer explains merge order (global first, most specific wins).
 
 ```bash
-# Show a config file with syntax highlighting
 alph config show ~/.config/alph/config.yaml
 ```
 
 Expected: YAML content printed with syntax highlighting (monokai theme).
 
 ```bash
-# Show a path that doesn't exist — should print bootstrap instructions + template
 alph config show /tmp/alph-test/does-not-exist/config.yaml
 ```
 
-Expected: `not found: ...` message, followed by `alph registry init` instructions and
-a commented YAML template with all standard keys and descriptions.
+Expected: `not found: ...` message followed by two hint lines — one pointing to
+`alph registry init`, one pointing to `alph defaults`. No template dump.
+
+```bash
+alph defaults
+```
+
+Expected: a summary of the currently resolved defaults — `creator`, `default_registry`,
+`default_pool`, `auto_commit`, and the resolved pool path. Values not yet configured
+show as `not set`.
 
 ---
 
@@ -318,39 +329,49 @@ a commented YAML template with all standard keys and descriptions.
 alph validate --pool /tmp/alph-test/registry/vehicles
 ```
 
-Expected: `all nodes valid.`
+Expected: `N nodes in pool vehicles valid.`
 
 ```bash
-# --verbose works on validate too
 alph validate --pool /tmp/alph-test/registry/vehicles -v
 ```
 
-Expected: same `all nodes valid.` result, preceded by DEBUG log lines.
+Expected: same `N nodes in pool vehicles valid.` result, preceded by DEBUG log lines.
 
 ```bash
-# Corrupt a node manually to test failure detection
-SNAP=$(ls /tmp/alph-test/registry/vehicles/snapshots/*.md | head -1)
-# Remove the schema_version line from frontmatter
-sed -i '' '/schema_version/d' "$SNAP"
+sed -i '' '/schema_version/d' /tmp/alph-test/registry/vehicles/snapshots/*.md
+```
+
+```bash
 alph validate --pool /tmp/alph-test/registry/vehicles
 ```
 
 Expected: `invalid: <filename>: missing required field: 'schema_version'`
 
 ```bash
-# Restore by reinserting the line (or just re-add the node)
-# Quick fix: re-seed the whole thing
-rm -rf /tmp/alph-test
-# (re-run the init and add steps above if you want a clean pool)
+mkdir -p /tmp/alph-test/registry/empty-pool/snapshots
 ```
 
 ```bash
-# Validate on a pool directory that no longer exists
+mkdir -p /tmp/alph-test/registry/empty-pool/live
+```
+
+```bash
+alph validate --pool /tmp/alph-test/registry/empty-pool
+```
+
+Expected: `no nodes found in pool empty-pool.`
+Not `N nodes in pool ... valid.` — an empty pool is reported distinctly.
+
+```bash
+rm -rf /tmp/alph-test
+```
+
+```bash
 alph validate --pool /tmp/alph-test/registry/vehicles
 ```
 
 Expected: `error: pool directory not found: /tmp/alph-test/registry/vehicles`
-NOT "all nodes valid." — an empty or missing pool is reported honestly.
+Not `N nodes ... valid.` — a missing pool is an error, not a valid result.
 
 ---
 
@@ -358,73 +379,73 @@ NOT "all nodes valid." — an empty or missing pool is reported honestly.
 
 ```bash
 cd /Users/cpettet/git/chasemp/AlpheusCEF/multi-pool-repo-example
+```
 
-# seed.py uses the alph library directly; run it with the poetry venv python
-VENV_PYTHON=$(poetry -C /Users/cpettet/git/chasemp/AlpheusCEF/alph-cli env info --path)/bin/python
-
-# Wipe and recreate
-$VENV_PYTHON seed.py --wipe
+```bash
+poetry -C /Users/cpettet/git/chasemp/AlpheusCEF/alph-cli run python "$(pwd)/seed.py" --wipe
 ```
 
 Expected: `28 total`, 3 pools created, 9+9+10 nodes.
 
 ```bash
-POOL=/Users/cpettet/git/chasemp/AlpheusCEF/multi-pool-repo-example/registry
+alph list --pool /Users/cpettet/git/chasemp/AlpheusCEF/multi-pool-repo-example/registry/vehicles
+```
 
-# List all pools
-alph list --pool $POOL/vehicles
-alph list --pool $POOL/appliances
-alph list --pool $POOL/remodeling
+```bash
+alph list --pool /Users/cpettet/git/chasemp/AlpheusCEF/multi-pool-repo-example/registry/appliances
+```
+
+```bash
+alph list --pool /Users/cpettet/git/chasemp/AlpheusCEF/multi-pool-repo-example/registry/remodeling
 ```
 
 Expected: tables showing nodes. Remodeling has 10 (includes the 2025 capital plan node).
 
 ```bash
-# Show the cross-pool reference node
-alph show 9eb6b033c1de --pool $POOL/remodeling
+alph show 9eb6b033c1de --pool /Users/cpettet/git/chasemp/AlpheusCEF/multi-pool-repo-example/registry/remodeling
 ```
 
 Expected: node with `related: appliances::a76746c51d46, 3f9a51c99832`
 This demonstrates the cross-pool `pool_name::node_id` format.
 
 ```bash
-# Show a within-pool reference (CV axle -> 60k service)
-alph show 5d4e71fbe603 --pool $POOL/vehicles
+alph show 5d4e71fbe603 --pool /Users/cpettet/git/chasemp/AlpheusCEF/multi-pool-repo-example/registry/vehicles
 ```
 
 Expected: `related: 2079032c3079`
 
 ```bash
-# Validate the whole demo
-alph validate --pool $POOL/vehicles
-alph validate --pool $POOL/appliances
-alph validate --pool $POOL/remodeling
+alph validate --pool /Users/cpettet/git/chasemp/AlpheusCEF/multi-pool-repo-example/registry/vehicles
 ```
 
-Expected: `all nodes valid.` for all three.
+```bash
+alph validate --pool /Users/cpettet/git/chasemp/AlpheusCEF/multi-pool-repo-example/registry/appliances
+```
+
+```bash
+alph validate --pool /Users/cpettet/git/chasemp/AlpheusCEF/multi-pool-repo-example/registry/remodeling
+```
+
+Expected: `N nodes in pool <name> valid.` for all three.
 
 ---
 
 ## 9. MCP Server — Smoke Test
 
 ```bash
-# Start the server in one terminal (keep it running)
 alph-mcp &
-MCP_PID=$!
-sleep 2
-echo "MCP server PID: $MCP_PID"
 ```
 
 Expected: server starts without error (FastMCP logs to stderr).
 
 ```bash
-# Confirm process is running
 ps aux | grep alph-mcp | grep -v grep
 ```
 
+Expected: process appears in the list.
+
 ```bash
-# Stop it
-kill $MCP_PID
+pkill -f alph-mcp
 ```
 
 For a proper MCP test, configure Claude Code to use the server:
@@ -449,13 +470,13 @@ Expected: Claude calls `list_pool_nodes` and returns the 10 remodeling nodes.
 
 ## 10. CI Check
 
-Verify GitHub Actions are green:
-
 ```bash
-# CI run on the latest push to main
 cd /Users/cpettet/git/chasemp/AlpheusCEF/alph-cli
 gh run list --limit 5
-gh run view --log  # most recent run
+```
+
+```bash
+gh run view --log
 ```
 
 Expected: tests, mypy, ruff all passing.
@@ -465,7 +486,6 @@ Expected: tests, mypy, ruff all passing.
 ## 11. Homebrew Formula
 
 ```bash
-# Confirm formula is auditable (run from tap repo)
 cd /Users/cpettet/git/chasemp/AlpheusCEF/homebrew-tap
 brew audit --strict Formula/alph.rb
 ```
@@ -473,8 +493,10 @@ brew audit --strict Formula/alph.rb
 Expected: no errors. Warnings about non-`homebrew/core` tap are normal.
 
 ```bash
-# Reinstall from tap to verify latest formula installs cleanly
 brew reinstall alph
+```
+
+```bash
 alph --help
 alph-mcp --help
 ```
@@ -500,24 +522,29 @@ will automatically update the formula in homebrew-tap via the release workflow.
 - [ ] `brew install alph` works cleanly
 - [ ] Both `alph` and `alph-mcp` binaries in PATH
 - [ ] `alph --help` shows: `add`, `list`, `show`, `validate`, `registry`, `pool`, `config`
-- [ ] `alph registry init` sets default when no default exists; reports full expanded config path
+- [ ] `alph registry init` sets default when no default exists; reports full expanded pool home and config path
 - [ ] `alph registry list` shows registry ID, name, context, home path
 - [ ] `alph pool init --registry <id>` finds registry from global config by ID
 - [ ] `alph pool init --registry ghost` errors and shows known registries
+- [ ] `alph pool list` lists pools in the default registry with name, type, context, path
+- [ ] `alph pool list --registry <id>` lists pools in the specified registry
 - [ ] `alph add` deduplicates correctly (same context → "duplicate: node already exists")
-- [ ] `alph list` default shows active only; `-s archived` expands
+- [ ] `alph add` with `$` in context: use single quotes to prevent bash expansion
+- [ ] `alph list` default shows active only; `-s archived` shows only archived (exclusive); `-s all` shows everything; `-s foo,bar` comma-separation works
 - [ ] `alph list --pool vehicles` resolves pool by name from registry config
 - [ ] `alph show` displays all fields including `related:`
 - [ ] `alph validate` catches schema violations
-- [ ] `alph validate` on missing pool directory errors (not "all nodes valid.")
-- [ ] `alph validate` on empty pool prints "no nodes found." (not "all nodes valid.")
+- [ ] `alph validate` success prints `N nodes in pool <name> valid.`
+- [ ] `alph validate` on missing pool directory errors (not a valid result)
+- [ ] `alph validate` on empty pool prints `no nodes found in pool <name>.`
 - [ ] Short aliases work: `alph l`, `alph a`, `alph s`, `alph v`
 - [ ] Per-command `-v`/`--verbose` flag works: `alph list -v`, `alph validate -v`
 - [ ] Config defaults (`default_registry`, `default_pool`, `creator`) resolve correctly
 - [ ] `alph add` / `alph list` work without `--pool` / `--creator` when config set
 - [ ] `alph config list` shows config discovery tree with exists/missing status
 - [ ] `alph config show <path>` displays YAML with syntax highlighting
-- [ ] `alph config show <missing-path>` shows bootstrap instructions + template
+- [ ] `alph config show <missing-path>` shows "not found" + hints to `registry init` and `alph defaults` (no template dump)
+- [ ] `alph defaults` shows resolved creator, registry, pool, auto_commit, and resolved pool path; unset values show as `not set`
 - [ ] Demo registry seeds 28 nodes cleanly
 - [ ] Cross-pool `related:` field renders correctly on show
 - [ ] `alph-mcp` starts without error

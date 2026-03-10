@@ -6,11 +6,17 @@ Where the problem goes as it evolves, and where AlpheusCEF might need to follow.
 
 ## The Near Horizon (Things we know we need)
 
+### Pool-Local State Directory (`.alph/`)
+
+A reserved `.alph/` directory inside each pool is a natural place for pool-local state that should not be committed as nodes — e.g. a last-loaded timestamp, a local resolution cache for live nodes, or a per-machine config override. Nothing is written there yet. Before adding it back, nail down at least one concrete use case so the directory has a reason to exist on day one.
+
+
+
 ### Pool Interconnection
 
 Right now pools are mostly independent with `related_to` as loose coupling. As pool count grows, the connections between them become the most valuable part. A decision in the `standards` pool ripples into every work pool. A technique discovered in a personal project turns out to apply at work.
 
-The registry handles discovery and the namespaced `related_to` format (`pool::node_id`, `registry_id::pool::node_id`) provides explicit cross-references. What's still needed:
+The registry handles discovery and the namespaced `related_to` format (`pool_name::node_id`, `registry_id::pool_name::node_id`) provides explicit cross-references. What's still needed:
 - A registry-level index that maps which pools reference which other pools
 - A "ripple" mechanism: when a cross-cutting node changes, downstream pools are flagged as potentially stale
 

@@ -6,7 +6,7 @@ Same schema gaps as add_node.py (uses `body`, missing `schema_version`/`creator`
 wrong ID hash). Additionally, remote commit via GitHub Contents API is deferred
 to future input adapter work. See FUTURE.md "Remote node creation" open question.
 
-Creates fixed or live context nodes directly in a remote GitHub repo
+Creates snapshot or live context nodes directly in a remote GitHub repo
 without needing a local clone. Uses the GitHub Contents API.
 """
 
@@ -54,7 +54,7 @@ def commit_node(owner, repo, source, node_type, body, content="", tags=None, rel
     if meta:
         frontmatter["meta"] = meta
 
-    folder = "snapshots" if node_type == "fixed" else "pointers"
+    folder = "snapshots" if node_type == "snapshot" else "live"
     filename = f"{datetime.date.today()}-{node_id}.md"
     file_path = f"{folder}/{filename}"
 
@@ -90,7 +90,7 @@ def main():
     parser.add_argument("--owner", required=True, help="GitHub repo owner")
     parser.add_argument("--repo", required=True, help="GitHub repo name")
     parser.add_argument("--source", required=True, help="Originating system")
-    parser.add_argument("--type", required=True, choices=["fixed", "live"], dest="node_type")
+    parser.add_argument("--type", required=True, choices=["snapshot", "live"], dest="node_type")
     parser.add_argument("--body", required=True, help="Summary / description")
     parser.add_argument("--content", default="", help="Full content body")
     parser.add_argument("--tags", nargs="*")

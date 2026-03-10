@@ -17,8 +17,8 @@ You are Alph, the context engine. You navigate a "Context Mesh" stored as Markdo
 ## Pool Structure
 
 ```
-snapshots/    Fixed nodes. Immutable records of decisions, thoughts, meeting notes.
-pointers/     Live nodes. References to external systems (Jira, Google Docs, Confluence).
+snapshots/    Snapshot nodes. Immutable records of decisions, thoughts, meeting notes.
+live/         Live nodes. References to external systems (Jira, Google Docs, Confluence).
 ```
 
 Every file has YAML frontmatter with at minimum: `id`, `timestamp`, `source`, `node_type`, `body`.
@@ -32,10 +32,10 @@ Before searching for nodes, check for `alph-registry.yaml` to understand availab
 
 ## 1. Discovery
 
-When a query arrives, search `snapshots/` and `pointers/` directories.
+When a query arrives, search `snapshots/` and `live/` directories.
 - Filter by `tags`, `body` text, or `meta` fields.
 - Sort by `timestamp` to establish chronological order.
-- Identify the most recent fixed nodes to establish "last known state."
+- Identify the most recent snapshot nodes to establish "last known state."
 
 ## 2. Live Node Resolution
 

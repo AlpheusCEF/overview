@@ -1,7 +1,7 @@
 # AlpheusCEF: State of the Project
 
-**Date**: 2026-03-05
-**Status**: Design complete, pre-implementation
+**Date**: 2026-03-10
+**Status**: Phase 1 and Phase 2 (distribution + MCP) complete and shipping
 
 ---
 
@@ -61,13 +61,13 @@ A **pool** is a scoped collection of context nodes -- all the nodes for one proj
 
 A **node** is a single piece of context. It can be fixed content (a decision, a thought, any captured text), a set of dynamic resources (all websites in a list, all repos with a certain topic), or a pointer to a living document (which is pulled in its latest state at query time). Nodes carry a `context` field that the LLM reads during scanning to decide relevance before loading full content.
 
-All three entities share a common pattern: a `name` (machine identifier) and a `context` field (human/LLM-readable description). Pools and registries also support `cross_cutting: true` to be automatically included when loading any sibling.
+All three entities share a common pattern: an `id` (machine identifier) and a `context` field (human/LLM-readable description). Pools and registries also support `cross_cutting: true` to be automatically included when loading any sibling.
 
 ### Two Node Types
 
-**Fixed nodes** are snapshots. Someone said something, a decision was reached, a thought was captured. The content is frozen at creation time. It lives in `snapshots/`.
+**Snapshot nodes** are frozen moments. Someone said something, a decision was reached, a thought was captured. The content is immutable at creation time. They live in `snapshots/`. The shorthand `snap` is accepted by the CLI (`--type snap`).
 
-**Live nodes** are pointers. They reference something that changes -- a Jira ticket, a Confluence page, a Google Doc, or a collection of resources matching a query. The file contains metadata and a context description, but the real content must be fetched at query time. They live in `pointers/` and include a `provider` hint telling the LLM which tool to use for resolution. Live nodes default to resolving a single resource; collection resolution (e.g., "all repos with topic:security") is indicated via `meta.resolves_to: collection`.
+**Live nodes** reference something that changes -- a Jira ticket, a Confluence page, a Google Doc, or a collection of resources matching a query. The file contains metadata and a context description, but the real content must be fetched at query time. They live in `live/` and include a `provider` hint telling the LLM which tool to use for resolution. Live nodes default to resolving a single resource; collection resolution (e.g., "all repos with topic:security") is indicated via `meta.resolves_to: collection`.
 
 ### The Schema
 
@@ -76,10 +76,10 @@ Every node has a common core in its YAML frontmatter:
 | Field | Required | Description |
 |-------|----------|-------------|
 | `schema_version` | Yes | Schema version (starts at `"1"`) |
-| `id` | Yes | 12-char SHA-256 hash (of timestamp + source + context) |
+| `id` | Yes | 12-char SHA-256 hash (of source + context; timestamp excluded for idempotency) |
 | `timestamp` | Yes | ISO-8601 creation time |
 | `source` | Yes | Originating system (cli, slack, google_docs) |
-| `node_type` | Yes | `fixed` or `live` |
+| `node_type` | Yes | `snapshot` or `live` |
 | `context` | Yes | Human/LLM-readable description of this node |
 | `creator` | Yes | Who created the node (defaults to user's email) |
 
@@ -96,27 +96,33 @@ Optional fields provide graph edges and extensibility:
 
 `status` is a first-class field because it affects **query behavior** — inclusion/exclusion — not just labeling. That is the line between `status` and `tags`: tags are for categorization, `status` is for system behavior.
 
-| Value | Default queries | With `-s` / `--status` | Meaning |
-|-------|----------------|------------------------|---------|
-| `active` (or absent) | included | included | Normal, in active rotation |
-| `archived` | excluded | included | No longer relevant — keep for history, rarely surface |
-| `suppressed` | excluded | included | Still relevant but noisy — like `--verbose` content |
+| Value | Default (no `-s`) | With `-s <value>` | Meaning |
+|-------|-------------------|-------------------|---------|
+| `active` (or absent) | included | only if explicitly requested | Normal, in active rotation |
+| `archived` | excluded | shown exclusively | No longer relevant — keep for history, rarely surface |
+| `suppressed` | excluded | shown exclusively | Still relevant but noisy — like `--verbose` content |
 
 `active` is the implicit default. Omitting `status` from frontmatter is equivalent to `status: active`. Declaring it explicitly is valid and improves clarity in automated or bulk-created nodes.
 
-The `-s` / `--status` flag on `alph list` (and other query commands) expands the result set beyond active. It accepts one or more values — `archived`, `suppressed`, or `all` (include every node regardless of status). Without the flag, only `active` nodes are returned.
+The `-s` / `--status` flag on `alph list` is an **exclusive filter** — it shows only nodes matching the specified status, not active nodes plus the requested status. Without the flag, only `active` nodes are returned. Multiple values can be combined with commas or by repeating the flag:
+
+```
+-s archived              show only archived
+-s archived,suppressed   show only archived and suppressed
+-s all                   show every node regardless of status
+```
 
 **Tags vs. status — the distinction in practice:**
 
 Tags like `open`, `closed`, `in-progress`, `blocked` are domain categorization of work state — they affect how humans and LLMs *interpret* a node, but not whether the system *surfaces* it. A closed repair record is still active context history you want in default queries. `archived` is what you set when the entire node is no longer relevant to any context. A node can be `tags: [closed]` and `status: active` simultaneously — closed work, still relevant history.
 
-Content below the frontmatter `---` separator is free-form Markdown. Fixed nodes typically have substantial content; live nodes typically have minimal or no content below the frontmatter.
+Content below the frontmatter `---` separator is free-form Markdown. Snapshot nodes typically have substantial content; live nodes typically have minimal or no content below the frontmatter.
 
 The schema is enforced by a JSON Schema validator. The validator also checks the registry for structural correctness (valid paths, no duplicate pool names, required fields).
 
 ### ID Generation and Idempotency
 
-Node IDs are deterministic: `sha256(timestamp + source + context)[:12]`. If someone tries to add a node that already exists (same timestamp, source, and context), the system reports who created the existing node and when, rather than creating a duplicate. This provides natural deduplication across input adapters.
+Node IDs are deterministic: `sha256(source + context)[:12]`. Timestamp is intentionally excluded from the hash so that re-submitting the same context from the same source always produces the same ID regardless of when it is submitted. If someone tries to add a node that already exists (same source and context), the system reports who created the existing node and when, rather than creating a duplicate. This provides natural deduplication across input adapters.
 
 ### Stateful Context Loading
 
@@ -174,23 +180,28 @@ Three levels, each overriding the previous:
 | Level | Location | Contents |
 |-------|----------|----------|
 | Global | `~/.config/alph/config.yaml` | Creator email, auto_commit, default registry, default pool, registry declarations |
-| Pool | `.alph/config.yaml` in pool root | Pool-specific overrides |
-| CLI flags | `--commit`, `--creator`, `-c`, etc. | Per-invocation overrides |
+| Local walk-up | `config.yaml` files from cwd upward to root | Project or directory-specific overrides; most-specific (nearest to cwd) wins |
+| CLI flags | `--pool`, `--creator`, `-c`, etc. | Per-invocation overrides |
 
-Secrets live separately in `~/.config/alph/secrets.yaml` (never in a pool repo, always in .gitignore).
+Registry metadata (`pool_home` path, context, name, pools) lives entirely in the global config under `registries[id]`. No per-registry config file is written to the pool home directory. The `load_config` function is the single authority on where to look; all other config-related functions operate on the loaded result.
 
-Registries are declared in the alph config file alongside other settings at the desired scope. All registries in the same config file are peers by default.
+Registries are declared in the alph config file alongside other settings. All registries in the same config file are peers by default.
 
 ### CLI Commands
 
 | Command | Short | Description |
 |---------|-------|-------------|
 | `alph registry init` | | Create a registry, validate, show what was created |
+| `alph registry list` | | List known registries with ID, name, context, and pool home path |
 | `alph pool init --name <name>` | | Create a pool, register it, validate, show defaults |
+| `alph pool list` | | List pools in a registry with name, type, context, and path |
 | `alph add -c "context text"` | `alph a -c "text"` | Create a node (auto-commits if configured) |
-| `alph list [-s archived\|suppressed\|all]` | `alph l` | List nodes; default active only, `-s` expands |
-| `alph show <id-or-context>` | `alph s <id>` | Display full node formatted for terminal |
-| `alph validate` | | Check nodes against schema + registry against registry schema |
+| `alph list [-s archived\|suppressed\|all] [-o json\|yaml\|csv]` | `alph l` | List nodes; default active only; `-s` for status filter; `-o` for output format |
+| `alph show <id>` | `alph s <id>` | Display full node formatted for terminal |
+| `alph validate` | `alph v` | Check nodes against schema + registry against registry schema |
+| `alph config list` | | Show config discovery tree with exists/missing status |
+| `alph config show <path>` | | Display a config file with syntax highlighting |
+| `alph defaults` | | Show resolved creator, registry, pool, and pool path from current config |
 
 `alph add` creates files locally and optionally auto-commits (`auto_commit: true` in config). No auto-pull, no auto-push -- those are separate git operations. The commit message follows the convention `alph: add <type> node <id>`.
 
@@ -228,13 +239,13 @@ Python 3.12+, Poetry for dependency management, FastMCP 3.x for the MCP server l
 - Git repos as the v1 backend (not Airtable, not a database)
 - Markdown + YAML frontmatter as the universal node format
 - Context funnel: registry -> pool -> node, each with a `context` field
-- Fixed/live node distinction; live nodes support single and collection resolution
+- Snapshot/live node distinction; live nodes support single and collection resolution
 - `schema_version` field in frontmatter from day one
 - `creator` field (defaults to email) for attribution and idempotency messages
-- Deterministic IDs from `sha256(timestamp + source + context)` for idempotency
+- Deterministic IDs from `sha256(source + context)[:12]` for idempotency (timestamp excluded so re-submitting identical context produces the same ID)
 - Registries have IDs and optional names; declared in alph config as peers
-- Pool separation declared at registry level; subdirectory default, repo override per pool
-- Config hierarchy: global (~/.config/alph/) -> pool (.alph/) -> CLI flags
+- Pool separation declared at registry level; subdirectory default (`subdir`), repo override per pool
+- Config hierarchy: global (`~/.config/alph/config.yaml`) -> local walk-up (config.yaml files from cwd upward, most specific wins) -> CLI flags
 - Default registry and default pool in config for daily-use simplicity
 - Core logic in `core.py`, exposed via FastMCP server + CLI wrapper
 - SKILL.md installed once at user level, references MCP tools
@@ -254,18 +265,17 @@ Python 3.12+, Poetry for dependency management, FastMCP 3.x for the MCP server l
 
 ### Decisions Deferred
 - Airtable as a potential UI/dashboard layer (explored, parked)
-- GraphRAG / Neo4j when graph complexity warrants it
 - Specific MCP server configurations (Google Docs, Jira)
 - Slack bot app name and setup
 - Domain registration (alpheus.io/dev/ai)
 - PWA design
 - Gateway function hosting (Lambda/Vercel)
-- Homebrew formula for distribution (Phase 2, via GitHub org tap repo)
+- GraphRAG / Neo4j when graph complexity warrants it (Phase 4)
 
 ### Integration Priority
 | Source | Priority | Status |
 |--------|----------|--------|
-| CLI (manual thoughts, links) | P0 | Designed, not built |
+| CLI (manual thoughts, links) | P0 | Built (v0.1.x) |
 | Slack threads/messages | P0 | Designed, not built |
 | Google Docs | P1 | Designed, not built |
 | Email threads | P1 | Concept only |
@@ -276,6 +286,36 @@ Python 3.12+, Poetry for dependency management, FastMCP 3.x for the MCP server l
 | Images (Vision adapter) | P2 | Concept only |
 | Basic Memory vault | P2 | Concept only |
 
-## What Has NOT Been Built
+## What Has Been Built
 
-Nothing has been built yet. Prototype scripts from design sessions remain in `scripts/` (annotated as pre-decision, will be replaced by proper implementation). Design session transcripts have been folded into STATE.md and FUTURE.md and removed. The project is at the "detailed design complete, ready to implement" stage.
+Phase 1 and Phase 2 are complete. The project shipped at v0.1.8 (Homebrew) with v0.1.9 in development.
+
+### Core Engine (`alph-cli` repo, `src/alph/`)
+
+- **`core.py`**: All production logic. Framework-agnostic. Fully type-annotated (mypy strict). Functions: `load_config`, `init_registry`, `init_pool`, `create_node`, `generate_id`, `check_idempotency`, `validate_node`, `validate_pool`, `list_nodes`, `list_pools`, `show_node`, `resolve_pool_name`, `collect_registries`, `find_registry_config`.
+- **`cli.py`**: Typer wrapper. Commands: `registry init`, `registry list`, `pool init`, `pool list`, `add` (`a`), `list` (`l`), `show` (`s`), `validate` (`v`), `config list`, `config show`, `defaults`. Per-command `-v`/`--verbose` flag. Default registry/pool resolution from config.
+- **`mcp_server.py`**: FastMCP 3.x wrapper. One tool per core function. Detailed docstrings, MCP annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`), dual output (`text` + `json`).
+
+### Test Suite
+
+132 tests passing. Full TDD — every production function written test-first. mypy strict clean, ruff clean.
+
+### Distribution
+
+- **Homebrew tap**: `AlpheusCEF/homebrew-tap`, formula at v0.1.8. `brew tap AlpheusCEF/tap && brew install alph` installs both `alph` and `alph-mcp` binaries.
+- **GitHub Actions**: CI runs tests, mypy, ruff on every push/PR. Release workflow builds sdist and updates homebrew-tap formula automatically on tag.
+
+### SKILL.md
+
+Installed at `~/.claude/skills/context-architect/SKILL.md`. Orients Claude to use the MCP tools rather than duplicating their logic.
+
+### Demo Data
+
+`multi-pool-repo-example/` in the alph-cli repo: three pools (vehicles, appliances, remodeling), 28 nodes total, cross-pool `related_to` references demonstrated. `seed.py --wipe` regenerates cleanly.
+
+### What Remains Unbuilt
+
+- Input adapters (Slack, Google Docs, Jira, email, etc.) — Phase 3
+- Timeline state (`.timeline-state.json`) — deferred to Phase 3 with first live adapter
+- Gateway function for standardizing messy input — Phase 3
+- PWA, browser extension, mobile — Phase 5
