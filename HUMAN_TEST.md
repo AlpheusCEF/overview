@@ -37,6 +37,12 @@ which alph-mcp
 ```
 
 ```bash
+alph --version
+```
+
+Expected: `alph 0.1.x`
+
+```bash
 alph --help
 ```
 
@@ -533,6 +539,7 @@ will automatically update the formula in homebrew-tap via the release workflow.
 
 - [ ] `brew install alph` works cleanly
 - [ ] Both `alph` and `alph-mcp` binaries in PATH
+- [ ] `alph --version` prints `alph 0.1.x`
 - [ ] `alph --help` shows: `add`, `list`, `show`, `validate`, `registry`, `pool`, `config`, `defaults`
 - [ ] `alph registry init` sets default when no default exists; reports full expanded pool home and config path
 - [ ] `alph registry list` shows registry ID, name, context, pool home path
