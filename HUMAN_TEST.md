@@ -276,9 +276,19 @@ Expected: same output as `alph show` (short alias).
 wrote `default_pool`. The missing piece for daily use is `creator`. This step
 adds `creator` to the config, preserving the existing registry and pool entries.
 
-```bash
-mkdir -p ~/.config/alph
-cat > ~/.config/alph/config.yaml << 'EOF'
+Open `~/.config/alph/config.yaml` and add `creator`, `default_pool`, and (if not
+already present from `registry init`) `default_registry` at the top level:
+
+```yaml
+creator: test@example.com
+default_registry: test-household
+default_pool: vehicles
+```
+
+The `registries` block written by `alph registry init` and `alph pool init`
+should already be present. The full file should now look like:
+
+```yaml
 creator: test@example.com
 default_registry: test-household
 default_pool: vehicles
@@ -287,7 +297,6 @@ registries:
     pool_home: /tmp/alph-test/registry
     context: Scratch registry for human test run.
     name: Test Household
-EOF
 ```
 
 ```bash
@@ -455,14 +464,14 @@ Requires a GitHub token (`GITHUB_TOKEN`, `GH_TOKEN`, or `gh auth login`).
 
 ### 9a. Add a remote registry to config
 
-```bash
-cat >> ~/.config/alph/config.yaml << 'EOF'
+Add the following entry under the `registries:` block in `~/.config/alph/config.yaml`:
+
+```yaml
   remote-example:
     pool_home: git@github.com:AlpheusCEF/multi-pool-repo-example.git:/registry
     context: Remote demo registry (read-only).
     mode: ro
     branch: seeded
-EOF
 ```
 
 Note: `branch: seeded` points RO reads at the `seeded` branch, which contains
@@ -540,17 +549,15 @@ This confirms the ad-hoc `--registry` URL path works; use a config entry with
 
 ### 10a. Clone a remote registry
 
-Edit config to add an RW remote registry:
+Add another entry under `registries:` in `~/.config/alph/config.yaml`:
 
-```bash
-cat >> ~/.config/alph/config.yaml << 'EOF'
+```yaml
   remote-rw:
     pool_home: git@github.com:AlpheusCEF/multi-pool-repo-example.git:/registry
     context: Remote demo registry (read-write clone).
     mode: rw
     branch: seeded
     clone_path: /tmp/alph-test-clone
-EOF
 ```
 
 Note: `branch: seeded` is respected by both RO reads and RW clones. The clone

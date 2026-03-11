@@ -22,7 +22,7 @@ registries:
   household:
     pool_home: git@github.com:AlpheusCEF/multi-pool-repo-example.git:/registry
     mode: ro              # ro (default for remote) | rw
-    branch: seeded        # git branch for RO reads (default: HEAD)
+    branch: seeded        # git branch for RO reads and RW clone checkout (default: HEAD)
     clone_path: ~/regs/h  # only used when mode: rw
     auto_push: false      # push after commit (rw only)
 ```
@@ -120,7 +120,7 @@ Reference material for when we get here:
 
 ### Homebrew Distribution
 
-> **Status**: Complete. `AlpheusCEF/homebrew-tap` ships `brew install alph` (v0.1.14). Release workflow auto-builds sdist; formula updated manually until `HOMEBREW_TAP_TOKEN` is configured.
+> **Status**: Complete. `AlpheusCEF/homebrew-tap` ships `brew install alph` (v0.1.16). Release workflow auto-builds sdist; formula updated manually until `HOMEBREW_TAP_TOKEN` is configured.
 
 ### Multi-LLM Frontend
 
