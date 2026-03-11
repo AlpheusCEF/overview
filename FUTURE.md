@@ -6,6 +6,41 @@ Where the problem goes as it evolves, and where AlpheusCEF might need to follow.
 
 ## The Near Horizon (Things we know we need)
 
+### Remote Git Registries
+
+A registry's `pool_home` can be a remote git URL instead of a local path. Two access modes:
+
+**RO (read-only, default for remote registries):** No local clone. Reads pool/node data via forge API (GitHub GraphQL, GitLab REST, etc.) or shallow sparse clone fallback for unknown hosts. Zero local state — files fetched to ephemeral tmpdir for core functions that expect `Path` objects. This is the path a future timeline UI would share.
+
+**RW (read-write, opt-in):** Persistent local clone with `.git`. Required for `add`, `pool init`, and other write operations. Clone location: user-specified `clone_path` or default `~/.cache/alph/clones/<sha256(url)[:12]>/`. Supports `auto_push` after commit.
+
+Config:
+```yaml
+registries:
+  household:
+    pool_home: git@github.com:AlpheusCEF/multi-pool-repo-example.git:/registry
+    mode: ro              # ro (default for remote) | rw
+    clone_path: ~/regs/h  # only used when mode: rw
+    auto_push: false      # push after commit (rw only)
+```
+
+Local registries (`pool_home` is a filesystem path) ignore `mode` — always RW.
+
+URL format: `<git-remote-url>:/<subpath>`. The `:/subpath` suffix scopes the registry to a subdirectory within the repo. Detection: starts with `git@`, `ssh://`, `git://`, or `https://...*.git`.
+
+Provider abstraction for RO reads:
+- `GitHubProvider` — GraphQL batch reads (2 API calls for a full pool of 50 nodes)
+- `GitLabProvider` / `BitbucketProvider` — REST APIs (~51 calls for 50 nodes)
+- `GitFallbackProvider` — shallow sparse clone to tmpdir for unknown hosts
+
+Auth: `GITHUB_TOKEN` / `GITLAB_TOKEN` env vars → `gh auth token` → git credential helper.
+
+Ad-hoc CLI usage: `alph --registry git@github.com:Org/repo.git:/path list` (ephemeral, not persisted to config).
+
+New commands: `alph registry clone <id>`, `alph registry pull <id>`, `alph registry check <id>`.
+
+When a user runs a write operation against an RO remote registry, alph errors with: `error: registry <id> is read-only. Set mode: rw in config to enable writes.`
+
 ### Unregistered Pool Notice
 
 When a user runs `alph add --pool /some/path` or `alph list --pool /some/path` against a pool that is not tracked in any registry, alph should print a notice: `notice: pool at /some/path is not registered in any registry`. The notice is informational, not an error — the command still runs. Default behavior: notice enabled (`true`). Suppressible via config key `unregistered_pool_notice: false`.
