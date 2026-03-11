@@ -201,7 +201,7 @@ Remote registries allow `pool_home` to be a git URL instead of a local path.
 - [x] `alph add` against RW remote uses local clone
 - [x] `registry clone`, `registry pull`, `registry check` all work
 - [x] `--pull` and `--registry` global options work
-- [x] 281 tests passing, mypy strict clean, ruff clean
+- [x] 300 tests passing, mypy strict clean, ruff clean
 
 ---
 
