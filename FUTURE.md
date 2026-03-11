@@ -24,7 +24,8 @@ registries:
     mode: ro              # ro (default for remote) | rw
     branch: seeded        # git branch for RO reads and RW clone checkout (default: HEAD)
     clone_path: ~/regs/h  # only used when mode: rw
-    auto_push: false      # push after commit (rw only)
+    auto_pull: false      # pull --ff-only before read (default: true for rw remote, false for local)
+    auto_push: false      # push after commit (default: true for rw remote, false for local)
 ```
 
 Local registries (`pool_home` is a filesystem path) ignore `mode` — always RW.
@@ -120,7 +121,7 @@ Reference material for when we get here:
 
 ### Homebrew Distribution
 
-> **Status**: Complete. `AlpheusCEF/homebrew-tap` ships `brew install alph` (v0.1.16). Release workflow auto-builds sdist; formula updated manually until `HOMEBREW_TAP_TOKEN` is configured.
+> **Status**: Complete. `AlpheusCEF/homebrew-tap` ships `brew install alph` (v0.1.19). Release workflow auto-builds sdist; formula updated manually until `HOMEBREW_TAP_TOKEN` is configured.
 
 ### Multi-LLM Frontend
 

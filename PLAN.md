@@ -152,8 +152,8 @@ Remote registries allow `pool_home` to be a git URL instead of a local path.
 - [x] `is_remote_registry(pool_home)` — detect remote URLs by prefix
 - [x] `parse_remote_registry(pool_home)` — split `<url>:/<subpath>`
 - [x] `effective_mode(entry)` — resolve ro/rw (remote defaults ro, local always rw)
-- [x] `RegistryEntry` fields: `mode`, `clone_path`, `auto_push`, `branch`
-- [x] `load_config` reads mode, clone_path, auto_push, branch from YAML
+- [x] `RegistryEntry` fields: `mode`, `clone_path`, `auto_push`, `auto_pull`, `branch`
+- [x] `load_config` reads mode, clone_path, auto_push, auto_pull, branch from YAML
 
 ### 2.5.2 Remote Providers (remote.py)
 
@@ -181,7 +181,7 @@ Remote registries allow `pool_home` to be a git URL instead of a local path.
 - [x] `registry check <id>` — verify remote reachability via git ls-remote
 - [x] `registry clone <id>` — clone remote registry locally
 - [x] `registry pull <id>` — pull latest changes in clone
-- [x] `registry status <id>` — show mode, clone state, branch, auto_push, path details
+- [x] `registry status <id>` — show mode, clone state, branch, auto_pull, auto_push, path details
 - [x] `registry list` shows mode column (ro/rw)
 - [x] `--pull` flag on `list`, `show`, `validate` — pull before read for RW clones
 - [x] `--registry <id-or-url>` global option — scope pool resolution for one invocation
@@ -201,7 +201,7 @@ Remote registries allow `pool_home` to be a git URL instead of a local path.
 - [x] `alph add` against RW remote uses local clone
 - [x] `registry clone`, `registry pull`, `registry check` all work
 - [x] `--pull` and `--registry` global options work
-- [x] 237 tests passing, mypy strict clean, ruff clean
+- [x] 256 tests passing, mypy strict clean, ruff clean
 
 ---
 

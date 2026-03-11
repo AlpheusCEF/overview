@@ -598,7 +598,8 @@ subpath:     registry
 branch:      seeded
 clone_path:  /tmp/alph-test-clone
 clone_state: cloned (clean)
-auto_push:   false
+auto_pull:   true
+auto_push:   true
 ```
 
 ```bash
@@ -749,6 +750,7 @@ will automatically update the formula in homebrew-tap via the release workflow.
 - [ ] `alph pool init --registry ghost` errors and shows known registries
 - [ ] `alph pool list` lists pools in the default registry with registry, name, type, context, path
 - [ ] `alph pool list --registry <id>` lists pools in the specified registry
+- [ ] `alph pool list -v` shows `source` column (configured vs discovered) for pools found on disk but not in config
 
 ### Node Operations
 - [ ] `alph add` deduplicates correctly (same context -> "duplicate: node already exists")
@@ -789,7 +791,7 @@ will automatically update the formula in homebrew-tap via the release workflow.
 ### Remote Registry — RW Mode
 - [ ] `alph registry clone <id>` creates local clone and checks out configured branch
 - [ ] Second `alph registry clone <id>` prints "already cloned" (not "cloned")
-- [ ] `alph registry status <id>` shows mode, remote, clone state, auto_push for remote registries
+- [ ] `alph registry status <id>` shows mode, remote, clone state, auto_pull, auto_push for remote registries
 - [ ] `alph registry status <id>` shows path and exists for local registries
 - [ ] `alph registry pull <id>` pulls latest changes in clone
 - [ ] `alph list --pool <remote-url> --pull` pulls before listing (RW clones)
