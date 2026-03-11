@@ -547,6 +547,17 @@ Add the following entry under the `registries:` block in `~/.config/alph/config.
     branch: seeded
 ```
 
+These fields can also be set at `alph registry init` time:
+
+```bash
+alph reg init \
+  --id remote-example \
+  --pool-home git@github.com:AlpheusCEF/multi-pool-repo-example.git:/registry \
+  --context "Remote demo registry (read-only)." \
+  --mode ro \
+  --branch seeded
+```
+
 Note: `branch: seeded` points RO reads at the `seeded` branch, which contains
 generated node data. The `main` branch has only `seed.py` and `seed.yaml`
 (the `registry/` directory is gitignored there).
@@ -648,15 +659,16 @@ the subcommand. `alph list --branch seeded` will fail with `No such option`.
 
 ### 10a. Clone a remote registry
 
-Add another entry under `registries:` in `~/.config/alph/config.yaml`:
+Create via CLI or add manually to config:
 
-```yaml
-  remote-rw:
-    pool_home: git@github.com:AlpheusCEF/multi-pool-repo-example.git:/registry
-    context: Remote demo registry (read-write clone).
-    mode: rw
-    branch: seeded
-    clone_path: /tmp/alph-test-clone
+```bash
+alph reg init \
+  --id remote-rw \
+  --pool-home git@github.com:AlpheusCEF/multi-pool-repo-example.git:/registry \
+  --context "Remote demo registry (read-write clone)." \
+  --mode rw \
+  --branch seeded \
+  --clone-path /tmp/alph-test-clone
 ```
 
 Note: `branch: seeded` is respected by both RO reads and RW clones. The clone

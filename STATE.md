@@ -298,7 +298,7 @@ Python 3.12+, Poetry for dependency management, FastMCP 3.x for the MCP server l
 
 ## What Has Been Built
 
-Phase 1, Phase 2, and remote registry support are complete. The project is at v0.1.22 (Homebrew).
+Phase 1, Phase 2, and remote registry support are complete. The project is at v0.1.23 (Homebrew).
 
 ### Core Engine (`alph-cli` repo, `src/alph/`)
 
@@ -309,11 +309,11 @@ Phase 1, Phase 2, and remote registry support are complete. The project is at v0
 
 ### Test Suite
 
-278 tests passing. Full TDD — every production function written test-first. mypy strict clean, ruff clean.
+281 tests passing. Full TDD — every production function written test-first. mypy strict clean, ruff clean.
 
 ### Distribution
 
-- **Homebrew tap**: `AlpheusCEF/homebrew-tap`, formula at v0.1.22. `brew tap AlpheusCEF/tap && brew install alph` installs both `alph` and `alph-mcp` binaries. Formula uses `preserve_rpath` to avoid Rust-extension dylib relocation issues.
+- **Homebrew tap**: `AlpheusCEF/homebrew-tap`, formula at v0.1.23. `brew tap AlpheusCEF/tap && brew install alph` installs both `alph` and `alph-mcp` binaries. Formula uses `preserve_rpath` to avoid Rust-extension dylib relocation issues.
 - **GitHub Actions**: CI runs tests, mypy, ruff on every push/PR. Release workflow builds sdist and updates homebrew-tap formula automatically on tag.
 
 ### SKILL.md
