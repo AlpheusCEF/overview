@@ -485,18 +485,20 @@ Expected: `ok: remote-example remote is reachable (git@github.com:AlpheusCEF/mul
 
 ### 9c. List nodes from remote pool
 
+Uses `--registry` to go through the config entry (which has `branch: seeded`):
+
 ```bash
-alph list --pool git@github.com:AlpheusCEF/multi-pool-repo-example.git:/registry/vehicles
+alph --registry remote-example list --pool vehicles
 ```
 
-Expected: table of nodes fetched via GitHub GraphQL API. No local clone created.
+Expected: table of nodes fetched via GitHub GraphQL API from the `seeded` branch. No local clone created.
 
 ### 9d. Show a node from remote pool
 
 Copy a node ID from the list output above.
 
 ```bash
-alph show <paste-id-here> --pool git@github.com:AlpheusCEF/multi-pool-repo-example.git:/registry/vehicles
+alph --registry remote-example show <paste-id-here> --pool vehicles
 ```
 
 Expected: full node display with all fields.
@@ -504,7 +506,7 @@ Expected: full node display with all fields.
 ### 9e. Validate remote pool
 
 ```bash
-alph validate --pool git@github.com:AlpheusCEF/multi-pool-repo-example.git:/registry/vehicles
+alph --registry remote-example validate --pool vehicles
 ```
 
 Expected: `N nodes in pool ... valid.`
@@ -519,13 +521,18 @@ alph add -c "Should fail." \
 
 Expected: `error: registry is read-only. Set mode: rw in config to enable writes.`
 
-### 9g. Ad-hoc --registry flag
+### 9g. Ad-hoc --registry flag with raw URL
+
+Ad-hoc URLs bypass config (no `branch: seeded`), so reads hit the main branch
+which has no node data. This verifies the ad-hoc path works without error:
 
 ```bash
 alph --registry git@github.com:AlpheusCEF/multi-pool-repo-example.git:/registry list --pool vehicles
 ```
 
-Expected: same node list as 9c, using the global `--registry` flag instead of a full URL in `--pool`.
+Expected: empty table (main branch has no node data — `registry/` is gitignored there).
+This confirms the ad-hoc `--registry` URL path works; use a config entry with
+`branch: seeded` for actual data (as in 9c).
 
 ---
 
@@ -590,8 +597,11 @@ Expected:
 registry:    test-household
 mode:        rw
 path:        /tmp/alph-test/registry
-exists:      true
+exists:      false
 ```
+
+Note: `exists: false` because section 7 ran `rm -rf /tmp/alph-test`.
+To see `exists: true`, run this before section 7's cleanup.
 
 ### 10c. Pull latest changes
 

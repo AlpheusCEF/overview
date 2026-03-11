@@ -22,13 +22,14 @@ registries:
   household:
     pool_home: git@github.com:AlpheusCEF/multi-pool-repo-example.git:/registry
     mode: ro              # ro (default for remote) | rw
+    branch: seeded        # git branch for RO reads (default: HEAD)
     clone_path: ~/regs/h  # only used when mode: rw
     auto_push: false      # push after commit (rw only)
 ```
 
 Local registries (`pool_home` is a filesystem path) ignore `mode` — always RW.
 
-URL format: `<git-remote-url>:/<subpath>`. The `:/subpath` suffix scopes the registry to a subdirectory within the repo. Detection: starts with `git@`, `ssh://`, `git://`, or `https://...*.git`.
+URL format: `<git-remote-url>:/<subpath>`. The `:/subpath` suffix scopes the registry to a subdirectory within the repo. Detection: URL starts with `git@`, `ssh://`, `git://`, `http://`, or `https://`.
 
 Provider abstraction for RO reads:
 - `GitHubProvider` — GraphQL batch reads (2 API calls for a full pool of 50 nodes) **Implemented.**
@@ -119,7 +120,7 @@ Reference material for when we get here:
 
 ### Homebrew Distribution
 
-Create a tap repo in the GitHub org for `brew install alph`. Planned for early Phase 2 once the core CLI is stable.
+> **Status**: Complete. `AlpheusCEF/homebrew-tap` ships `brew install alph` (v0.1.14). Release workflow auto-builds sdist; formula updated manually until `HOMEBREW_TAP_TOKEN` is configured.
 
 ### Multi-LLM Frontend
 
