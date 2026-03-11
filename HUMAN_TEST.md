@@ -50,8 +50,11 @@ alph --help
 alph -h
 ```
 
-Expected: help shows top-level commands: `add`, `list`, `show`, `validate`, `registry`, `pool`, `config`, `defaults`, and global option `--registry`.
+Expected: help shows top-level commands: `add`, `list`, `show`, `validate`, `registry`, `pool`, `config`, `defaults`, and global options `--registry` and `--branch`.
 Both `--help` and `-h` should work.
+
+Note: `--registry` and `--branch` are **global options** — they must appear
+before the subcommand (e.g., `alph --branch seeded list`, not `alph list --branch seeded`).
 
 ---
 
@@ -153,6 +156,54 @@ alph pool init \
 Expected: exit non-zero with `ghost-registry not found`, followed by a list
 of known registries (test-household should appear).
 
+### 2g. Default subcommands
+
+```bash
+alph registry
+```
+
+Expected: same output as `alph registry list` — table with `test-household`.
+
+```bash
+alph pool
+```
+
+Expected: same output as `alph pool list` — table with `vehicles`.
+
+### 2h. `reg` shorthand
+
+```bash
+alph reg list
+```
+
+Expected: same output as `alph registry list`.
+
+```bash
+alph reg
+```
+
+Expected: same as `alph registry` (defaults to list).
+
+### 2i. Reserved names
+
+```bash
+alph registry init \
+  --pool-home /tmp/alph-test/all-reg \
+  --id all \
+  --context "Should fail."
+```
+
+Expected: error — `'all' is a reserved name and cannot be used as a registry ID`.
+
+```bash
+alph pool init \
+  --registry test-household \
+  --name all \
+  --context "Should fail."
+```
+
+Expected: error — `'all' is a reserved name and cannot be used as a pool name`.
+
 ---
 
 ## 3. CLI — Add Nodes
@@ -211,6 +262,7 @@ alph list --pool /tmp/alph-test/registry/vehicles
 
 Expected: 2 rows — the snapshot purchase node and the live 10k-service node.
 The wiper blade node (status: archived) is NOT shown.
+Rows use alternating styles (normal / dim) for readability.
 
 ```bash
 alph list --pool /tmp/alph-test/registry/vehicles -s archived
@@ -478,6 +530,11 @@ Note: `branch: seeded` points RO reads at the `seeded` branch, which contains
 generated node data. The `main` branch has only `seed.py` and `seed.yaml`
 (the `registry/` directory is gitignored there).
 
+If your SSH config uses a host alias (e.g., `Host github-personal` with
+`HostName github.com`), you can use that alias in the URL:
+`git@github-personal:AlpheusCEF/multi-pool-repo-example.git:/registry`.
+Alph resolves SSH aliases via `~/.ssh/config` to detect the forge correctly.
+
 ```bash
 alph registry list
 ```
@@ -491,6 +548,13 @@ alph registry check remote-example
 ```
 
 Expected: `ok: remote-example remote is reachable (git@github.com:AlpheusCEF/multi-pool-repo-example.git)`
+
+```bash
+alph registry check all
+```
+
+Expected: checks every configured registry. Shows `ok` or `error` for each one.
+`test-household` (local) should show ok if the path exists; `remote-example` should show ok.
 
 ### 9c. List nodes from remote pool
 
@@ -542,6 +606,20 @@ alph --registry git@github.com:AlpheusCEF/multi-pool-repo-example.git:/registry 
 Expected: empty table (main branch has no node data — `registry/` is gitignored there).
 This confirms the ad-hoc `--registry` URL path works; use a config entry with
 `branch: seeded` for actual data (as in 9c).
+
+### 9h. Ad-hoc --branch flag with raw URL
+
+Combine `--branch` with `--registry` to hit a specific branch without config:
+
+```bash
+alph --branch seeded --registry git@github.com:AlpheusCEF/multi-pool-repo-example.git:/registry list --pool vehicles
+```
+
+Expected: table of nodes from the `seeded` branch — same data as 9c.
+This verifies `--branch` works as a global option for ad-hoc remote operations.
+
+Note: `--branch` and `--registry` are global options and must appear **before**
+the subcommand. `alph list --branch seeded` will fail with `No such option`.
 
 ---
 
@@ -741,16 +819,21 @@ will automatically update the formula in homebrew-tap via the release workflow.
 - [ ] `brew install alph` works cleanly
 - [ ] Both `alph` and `alph-mcp` binaries in PATH
 - [ ] `alph --version` prints `alph 0.1.x`
-- [ ] `alph --help` shows: `add`, `list`, `show`, `validate`, `registry`, `pool`, `config`, `defaults`, `--registry`
+- [ ] `alph --help` shows: `add`, `list`, `show`, `validate`, `registry`, `pool`, `config`, `defaults`, global options `--registry` and `--branch`
 
 ### Registry and Pool Setup
 - [ ] `alph registry init` sets default when no default exists; reports full expanded pool home and config path
 - [ ] `alph registry list` shows registry ID, name, mode (rw/ro), context, pool home path
+- [ ] `alph registry` (no subcommand) defaults to `registry list`
+- [ ] `alph pool` (no subcommand) defaults to `pool list`
+- [ ] `alph reg list` works as shorthand for `alph registry list`
+- [ ] `alph reg` defaults to list (same as `alph registry`)
 - [ ] `alph pool init --registry <id>` finds registry from global config by ID
 - [ ] `alph pool init --registry ghost` errors and shows known registries
 - [ ] `alph pool list` lists pools in the default registry with registry, name, type, context, path
 - [ ] `alph pool list --registry <id>` lists pools in the specified registry
 - [ ] `alph pool list -v` shows `source` column (configured vs discovered) for pools found on disk but not in config
+- [ ] Reserved names: `alph registry init --id all` and `alph pool init --name all` both error
 
 ### Node Operations
 - [ ] `alph add` deduplicates correctly (same context -> "duplicate: node already exists")
@@ -765,6 +848,7 @@ will automatically update the formula in homebrew-tap via the release workflow.
 - [ ] `alph validate` on empty pool prints `no nodes found in pool <name>.`
 - [ ] Short aliases work: `alph l`, `alph a`, `alph s`, `alph v`
 - [ ] Per-command `-v`/`--verbose` flag works: `alph list -v`, `alph validate -v`
+- [ ] Tables use alternating row styles (normal / dim) for readability
 
 ### Config Defaults
 - [ ] Config defaults (`default_registry`, `default_pool`, `creator`) resolve correctly
@@ -781,21 +865,26 @@ will automatically update the formula in homebrew-tap via the release workflow.
 ### Remote Registry — RO Mode
 - [ ] `alph registry list` shows `ro` for remote and `rw` for local registries
 - [ ] `alph registry check <id>` verifies remote reachability
+- [ ] `alph registry check all` checks every configured registry
 - [ ] `branch: seeded` in config directs RO reads to the seeded branch
 - [ ] `alph list --pool <remote-url>` fetches nodes via GitHub API (no local clone)
 - [ ] `alph show <id> --pool <remote-url>` displays remote node content
 - [ ] `alph validate --pool <remote-url>` validates remote pool
 - [ ] `alph add` against RO remote pool errors: "registry is read-only"
 - [ ] `alph --registry <remote-url> list --pool <name>` works (ad-hoc global option)
+- [ ] `alph --branch seeded --registry <remote-url> list --pool <name>` works (ad-hoc branch override)
+- [ ] SSH host aliases in URLs (e.g., `git@github-personal:...`) resolve correctly via `~/.ssh/config`
 
 ### Remote Registry — RW Mode
 - [ ] `alph registry clone <id>` creates local clone and checks out configured branch
 - [ ] Second `alph registry clone <id>` prints "already cloned" (not "cloned")
 - [ ] `alph registry status <id>` shows mode, remote, clone state, auto_pull, auto_push for remote registries
 - [ ] `alph registry status <id>` shows path and exists for local registries
+- [ ] `auto_pull` and `auto_push` default to `true` for RW remote registries, `false` for local
 - [ ] `alph registry pull <id>` pulls latest changes in clone
 - [ ] `alph list --pool <remote-url> --pull` pulls before listing (RW clones)
 - [ ] `alph add` against RW remote pool creates node in local clone
+- [ ] `alph validate` on local registries with auto_pull/auto_push checks git health (remote, clean tree)
 
 ### MCP Server
 - [ ] `alph-mcp` starts without error

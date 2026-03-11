@@ -39,6 +39,8 @@ Provider abstraction for RO reads:
 
 Auth: `GITHUB_TOKEN` / `GH_TOKEN` env vars → `gh auth token`. **Implemented.**
 
+SSH host alias resolution: URLs like `git@github-personal:org/repo.git` are resolved via `~/.ssh/config` to detect the actual forge (e.g., `HostName github.com`). This avoids requiring users to duplicate SSH config knowledge in alph config. **Implemented.**
+
 Ad-hoc CLI usage: `alph --registry git@github.com:Org/repo.git:/path list --pool vehicles` (ephemeral, not persisted to config). **Implemented.**
 
 Commands: `alph registry clone <id>`, `alph registry pull <id>`, `alph registry check <id>`. **Implemented.**
@@ -121,7 +123,7 @@ Reference material for when we get here:
 
 ### Homebrew Distribution
 
-> **Status**: Complete. `AlpheusCEF/homebrew-tap` ships `brew install alph` (v0.1.20). Release workflow auto-builds sdist; formula updated manually until `HOMEBREW_TAP_TOKEN` is configured.
+> **Status**: Complete. `AlpheusCEF/homebrew-tap` ships `brew install alph` (v0.1.21). Release workflow auto-builds sdist; formula updated manually until `HOMEBREW_TAP_TOKEN` is configured.
 
 ### Multi-LLM Frontend
 
