@@ -307,7 +307,7 @@ Phase 1, Phase 2, and remote registry support are complete. The project is at v0
 
 ### Test Suite
 
-221 tests passing. Full TDD — every production function written test-first. mypy strict clean, ruff clean.
+224 tests passing. Full TDD — every production function written test-first. mypy strict clean, ruff clean.
 
 ### Distribution
 

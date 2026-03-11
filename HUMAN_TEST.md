@@ -548,15 +548,19 @@ cat >> ~/.config/alph/config.yaml << 'EOF'
     pool_home: git@github.com:AlpheusCEF/multi-pool-repo-example.git:/registry
     context: Remote demo registry (read-write clone).
     mode: rw
+    branch: seeded
     clone_path: /tmp/alph-test-clone
 EOF
 ```
+
+Note: `branch: seeded` is respected by both RO reads and RW clones. The clone
+will check out the `seeded` branch (which has the generated `registry/` data).
 
 ```bash
 alph registry clone remote-rw
 ```
 
-Expected: `cloned: remote-rw -> /tmp/alph-test-clone`
+Expected: `cloned: remote-rw -> /tmp/alph-test-clone (branch: seeded)`
 
 ```bash
 alph registry clone remote-rw
@@ -569,7 +573,8 @@ Expected: `ok: remote-rw already cloned at /tmp/alph-test-clone`
 ls /tmp/alph-test-clone/registry/
 ```
 
-Expected: pool directories (vehicles, appliances, remodeling).
+Expected: pool directories (vehicles, appliances, remodeling) — present because
+the `seeded` branch has committed `registry/` data.
 
 ### 10b. Registry status
 
@@ -583,6 +588,7 @@ registry:    remote-rw
 mode:        rw
 remote:      git@github.com:AlpheusCEF/multi-pool-repo-example.git
 subpath:     registry
+branch:      seeded
 clone_path:  /tmp/alph-test-clone
 clone_state: cloned (clean)
 auto_push:   false
@@ -774,7 +780,7 @@ will automatically update the formula in homebrew-tap via the release workflow.
 - [ ] `alph --registry <remote-url> list --pool <name>` works (ad-hoc global option)
 
 ### Remote Registry — RW Mode
-- [ ] `alph registry clone <id>` creates local clone of remote registry
+- [ ] `alph registry clone <id>` creates local clone and checks out configured branch
 - [ ] Second `alph registry clone <id>` prints "already cloned" (not "cloned")
 - [ ] `alph registry status <id>` shows mode, remote, clone state, auto_push for remote registries
 - [ ] `alph registry status <id>` shows path and exists for local registries
