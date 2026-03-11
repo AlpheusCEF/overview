@@ -1,7 +1,7 @@
 # AlpheusCEF: State of the Project
 
-**Date**: 2026-03-10
-**Status**: Phase 1 and Phase 2 (distribution + MCP) complete and shipping
+**Date**: 2026-03-11
+**Status**: Phase 1, Phase 2 (distribution + MCP), and remote registry support complete and shipping
 
 ---
 
@@ -163,11 +163,12 @@ The tools are symmetric: the same CLI commands a human runs are the same functio
 ```
 alph/
   core.py           # All logic. No framework dependency. Permanent.
+  remote.py         # Remote registry providers (GitHub GraphQL) and clone management.
   mcp_server.py     # FastMCP wrapper exposing core as MCP tools. Swappable.
   cli.py            # CLI wrapper exposing core as commands. Swappable.
 ```
 
-Core logic is importable and framework-agnostic. The MCP server and CLI are thin wrappers that both call `core.py`. If MCP is replaced by something else, only `mcp_server.py` changes.
+Core logic is importable and framework-agnostic. The MCP server and CLI are thin wrappers that both call `core.py`. If MCP is replaced by something else, only `mcp_server.py` changes. Remote registry access (`remote.py`) provides read-only API providers (GitHub GraphQL) and clone management for read-write operations.
 
 MCP tools use FastMCP 3.x decorators with detailed docstrings (following the Basic Memory pattern), MCP annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`), and dual output format (`text` for human-readable, `json` for structured).
 
@@ -179,7 +180,7 @@ Three levels, each overriding the previous:
 
 | Level | Location | Contents |
 |-------|----------|----------|
-| Global | `~/.config/alph/config.yaml` | Creator email, auto_commit, default registry, default pool, registry declarations |
+| Global | `~/.config/alph/config.yaml` | Creator email, auto_commit, default registry, default pool, registry declarations (including mode, clone_path, auto_push for remote registries) |
 | Local walk-up | `config.yaml` files from cwd upward to root | Project or directory-specific overrides; most-specific (nearest to cwd) wins |
 | CLI flags | `--pool`, `--creator`, `-c`, etc. | Per-invocation overrides |
 
@@ -192,18 +193,23 @@ Registries are declared in the alph config file alongside other settings. All re
 | Command | Short | Description |
 |---------|-------|-------------|
 | `alph registry init` | | Create a registry, validate, show what was created |
-| `alph registry list` | | List known registries with ID, name, context, and pool home path |
+| `alph registry list` | | List known registries with ID, name, mode, context, and pool home path |
+| `alph registry check <id>` | | Verify a remote registry is reachable (runs `git ls-remote`) |
+| `alph registry clone <id>` | | Clone a remote registry locally for RW access |
+| `alph registry pull <id>` | | Pull latest changes for a cloned remote registry |
 | `alph pool init --name <name>` | | Create a pool, register it, validate, show defaults |
 | `alph pool list` | | List pools in a registry with name, type, context, and path |
-| `alph add -c "context text"` | `alph a -c "text"` | Create a node (auto-commits if configured) |
-| `alph list [-s archived\|suppressed\|all] [-o json\|yaml\|csv]` | `alph l` | List nodes; default active only; `-s` for status filter; `-o` for output format |
-| `alph show <id>` | `alph s <id>` | Display full node formatted for terminal |
-| `alph validate` | `alph v` | Check nodes against schema + registry against registry schema |
+| `alph add -c "context text"` | `alph a -c "text"` | Create a node (auto-commits if configured; auto-pushes if `auto_push: true`) |
+| `alph list [-s ...] [-o ...] [--pull]` | `alph l` | List nodes; default active only; `-s` for status filter; `-o` for output format; `--pull` for fresh data |
+| `alph show <id> [--pull]` | `alph s <id>` | Display full node formatted for terminal; `--pull` for fresh data |
+| `alph validate [--pull]` | `alph v` | Check nodes against schema; `--pull` for fresh data |
 | `alph config list` | | Show config discovery tree with exists/missing status |
 | `alph config show <path>` | | Display a config file with syntax highlighting |
 | `alph defaults` | | Show resolved creator, registry, pool, and pool path from current config |
 
-`alph add` creates files locally and optionally auto-commits (`auto_commit: true` in config). No auto-pull, no auto-push -- those are separate git operations. The commit message follows the convention `alph: add <type> node <id>`.
+Global option: `alph --registry <id-or-url>` scopes pool resolution to a specific registry for one invocation. Accepts a registry ID/name or a remote git URL.
+
+`alph add` creates files locally and optionally auto-commits (`auto_commit: true` in config). For remote RW registries, `auto_push: true` pushes after commit. The commit message follows the convention `alph: add <type> node <id>`.
 
 Both `registry init` and `pool init` validate their output before reporting success and print a clear map of what was created and where (files, paths, defaults).
 
@@ -250,6 +256,7 @@ Python 3.12+, Poetry for dependency management, FastMCP 3.x for the MCP server l
 - Core logic in `core.py`, exposed via FastMCP server + CLI wrapper
 - SKILL.md installed once at user level, references MCP tools
 - Auto-commit on add (opt-in via config, no auto-pull/push)
+- Remote registries: two-mode architecture (RO via GitHub GraphQL API, RW via local clone); `mode: ro | rw` config per registry; `auto_push` for RW remotes
 - Validator checks both nodes and registry
 - `alph list` and `alph show` for human inspection
 - `status` field (`active`/`archived`/`suppressed`) as first-class for query behavior; tags for categorization only; `-s`/`--status` flag to expand beyond active
@@ -288,21 +295,22 @@ Python 3.12+, Poetry for dependency management, FastMCP 3.x for the MCP server l
 
 ## What Has Been Built
 
-Phase 1 and Phase 2 are complete. The project is at v0.1.11 (Homebrew).
+Phase 1, Phase 2, and remote registry support are complete. The project is at v0.1.12 (Homebrew).
 
 ### Core Engine (`alph-cli` repo, `src/alph/`)
 
-- **`core.py`**: All production logic. Framework-agnostic. Fully type-annotated (mypy strict). Functions: `load_config`, `init_registry`, `init_pool`, `create_node`, `generate_id`, `check_idempotency`, `validate_node`, `validate_pool`, `list_nodes`, `list_pools`, `show_node`, `resolve_pool_name`, `collect_registries`, `find_registry_config`.
-- **`cli.py`**: Typer wrapper. Commands: `registry init`, `registry list`, `pool init`, `pool list`, `add` (`a`), `list` (`l`), `show` (`s`), `validate` (`v`), `config list`, `config show`, `defaults`. Per-command `-v`/`--verbose` flag. Default registry/pool resolution from config.
-- **`mcp_server.py`**: FastMCP 3.x wrapper. One tool per core function. Detailed docstrings, MCP annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`), dual output (`text` + `json`).
+- **`core.py`**: All production logic. Framework-agnostic. Fully type-annotated (mypy strict). Functions: `load_config`, `init_registry`, `init_pool`, `create_node`, `generate_id`, `check_idempotency`, `validate_node`, `validate_pool`, `list_nodes`, `list_pools`, `show_node`, `resolve_pool_name`, `collect_registries`, `find_registry_config`, `is_remote_registry`, `parse_remote_registry`, `effective_mode`.
+- **`remote.py`**: Remote registry access. `GitHubProvider` (GraphQL batch reads), `RemoteProvider` protocol, `resolve_pool_readonly` (ephemeral tmpdir), clone management (`clone_remote_registry`, `pull_remote_registry`, `push_remote_registry`, `default_clone_dir`).
+- **`cli.py`**: Typer wrapper. Commands: `registry init`, `registry list`, `registry check`, `registry clone`, `registry pull`, `pool init`, `pool list`, `add` (`a`), `list` (`l`), `show` (`s`), `validate` (`v`), `config list`, `config show`, `defaults`. Global `--registry` option. Per-command `-v`/`--verbose` flag and `--pull` flag on read commands. Default registry/pool resolution from config with remote URL support.
+- **`mcp_server.py`**: FastMCP 3.x wrapper. One tool per core function. Detailed docstrings, MCP annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`), dual output (`text` + `json`). Transparent remote pool support via `_resolve_pool` context manager.
 
 ### Test Suite
 
-132 tests passing. Full TDD — every production function written test-first. mypy strict clean, ruff clean.
+212 tests passing. Full TDD — every production function written test-first. mypy strict clean, ruff clean.
 
 ### Distribution
 
-- **Homebrew tap**: `AlpheusCEF/homebrew-tap`, formula at v0.1.11. `brew tap AlpheusCEF/tap && brew install alph` installs both `alph` and `alph-mcp` binaries. Formula uses `preserve_rpath` to avoid Rust-extension dylib relocation issues.
+- **Homebrew tap**: `AlpheusCEF/homebrew-tap`, formula at v0.1.12. `brew tap AlpheusCEF/tap && brew install alph` installs both `alph` and `alph-mcp` binaries. Formula uses `preserve_rpath` to avoid Rust-extension dylib relocation issues.
 - **GitHub Actions**: CI runs tests, mypy, ruff on every push/PR. Release workflow builds sdist and updates homebrew-tap formula automatically on tag.
 
 ### SKILL.md
@@ -311,10 +319,12 @@ Installed at `~/.claude/skills/context-architect/SKILL.md`. Orients Claude to us
 
 ### Demo Data
 
-`multi-pool-repo-example/` in the alph-cli repo: three pools (vehicles, appliances, remodeling), 28 nodes total, cross-pool `related_to` references demonstrated. `seed.py --wipe` regenerates cleanly.
+`multi-pool-repo-example/` in the AlpheusCEF org: three pools (vehicles, appliances, remodeling), 28 nodes total, cross-pool `related_to` references demonstrated. `seed.py --wipe` regenerates cleanly.
 
 ### What Remains Unbuilt
 
+- Remote providers: GitLab, Bitbucket, and git fallback (shallow sparse clone) — deferred
+- Unregistered pool notice — designed in FUTURE.md, not yet implemented
 - Input adapters (Slack, Google Docs, Jira, email, etc.) — Phase 3
 - Timeline state (`.timeline-state.json`) — deferred to Phase 3 with first live adapter
 - Gateway function for standardizing messy input — Phase 3

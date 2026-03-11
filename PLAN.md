@@ -1,6 +1,6 @@
 # AlpheusCEF: Phased Execution Plan
 
-**Date**: 2026-03-10
+**Date**: 2026-03-11
 **Source of truth**: STATE.md (design), FUTURE.md (horizons)
 
 ---
@@ -142,6 +142,68 @@ FastMCP 3.x wrapper exposing core.py as MCP tools:
 
 ---
 
+## Phase 2.5: Remote Git Registries (Complete)
+
+Remote registries allow `pool_home` to be a git URL instead of a local path.
+
+### 2.5.1 Core Types and Detection (core.py)
+
+- [x] `RemoteRegistryRef` dataclass (remote_url, subpath, original)
+- [x] `is_remote_registry(pool_home)` — detect remote URLs by prefix
+- [x] `parse_remote_registry(pool_home)` — split `<url>:/<subpath>`
+- [x] `effective_mode(entry)` — resolve ro/rw (remote defaults ro, local always rw)
+- [x] `RegistryEntry` fields: `mode`, `clone_path`, `auto_push`
+- [x] `load_config` reads mode, clone_path, auto_push from YAML
+
+### 2.5.2 Remote Providers (remote.py)
+
+- [x] `RemoteProvider` protocol: `list_files`, `read_file`, `read_files`
+- [x] `GitHubProvider` — GraphQL batch reads (2 API calls for a full pool)
+- [x] Token resolution: `GITHUB_TOKEN` → `GH_TOKEN` → `gh auth token`
+- [x] `detect_forge()` — identify GitHub/GitLab/Bitbucket from URL
+- [x] `provider_for_url()` — factory returning the appropriate provider
+- [ ] `GitLabProvider` — deferred
+- [ ] `BitbucketProvider` — deferred
+- [ ] `GitFallbackProvider` (shallow sparse clone) — deferred
+
+### 2.5.3 Pool Resolution (remote.py)
+
+- [x] `resolve_pool_readonly()` — fetch pool to ephemeral tmpdir via provider API
+- [x] `default_clone_dir()` — `~/.cache/alph/clones/<sha256(url)[:12]>/`
+- [x] `clone_remote_registry()` — shallow git clone for RW access
+- [x] `pull_remote_registry()` — git pull --ff-only
+- [x] `push_remote_registry()` — git push
+
+### 2.5.4 CLI Integration (cli.py)
+
+- [x] `_pool_context` handles local, remote RO (API), and remote RW (clone) transparently
+- [x] `_require_pool` resolves remote URLs and remote default pools
+- [x] `registry check <id>` — verify remote reachability via git ls-remote
+- [x] `registry clone <id>` — clone remote registry locally
+- [x] `registry pull <id>` — pull latest changes in clone
+- [x] `registry list` shows mode column (ro/rw)
+- [x] `--pull` flag on `list`, `show`, `validate` — pull before read for RW clones
+- [x] `--registry <id-or-url>` global option — scope pool resolution for one invocation
+- [x] `auto_push` after write operations on RW remotes
+- [x] RO write attempts produce clear error: "registry is read-only"
+
+### 2.5.5 MCP Integration (mcp_server.py)
+
+- [x] `_resolve_pool` context manager for transparent remote support
+- [x] `tool_add_node` rejects remote pools with clear error message
+- [x] Read-only tools (list, show, validate) work with remote pools
+
+### Phase 2.5 Exit Criteria
+
+- [x] `alph list --pool git@github.com:org/repo.git:/path` works via GitHub API
+- [x] `alph add` against RO remote errors clearly
+- [x] `alph add` against RW remote uses local clone
+- [x] `registry clone`, `registry pull`, `registry check` all work
+- [x] `--pull` and `--registry` global options work
+- [x] 212 tests passing, mypy strict clean, ruff clean
+
+---
+
 ## Phase 3: Input Adapters
 
 Zero-friction context capture from wherever you already are.
@@ -263,6 +325,8 @@ The longer horizon. Not committed, but the design supports it.
 | mcp_server.py | alph-cli | Phase 2 | Done |
 | SKILL.md | alph-cli (installed to ~/.claude/) | Phase 2 | Done |
 | Homebrew formula | AlpheusCEF/homebrew-tap | Phase 2 | Done |
+| remote.py (GitHub provider, clone mgmt) | alph-cli | Phase 2.5 | Done |
+| GitLab/Bitbucket/git fallback providers | alph-cli | Phase 2.5 | Deferred |
 | Input adapters | alph-cli or separate repos | Phase 3 | Not started |
 | Timeline state | alph-cli | Phase 3 | Not started |
 | GraphRAG integration | alph-cli | Phase 4 | Not started |

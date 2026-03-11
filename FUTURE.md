@@ -8,11 +8,13 @@ Where the problem goes as it evolves, and where AlpheusCEF might need to follow.
 
 ### Remote Git Registries
 
+> **Status**: Core implementation complete (Phase 2.5). GitHub provider, RO/RW modes, clone management, CLI commands, `--pull` flag, and `--registry` global option all shipped. Remaining work: additional forge providers.
+
 A registry's `pool_home` can be a remote git URL instead of a local path. Two access modes:
 
-**RO (read-only, default for remote registries):** No local clone. Reads pool/node data via forge API (GitHub GraphQL, GitLab REST, etc.) or shallow sparse clone fallback for unknown hosts. Zero local state — files fetched to ephemeral tmpdir for core functions that expect `Path` objects. This is the path a future timeline UI would share.
+**RO (read-only, default for remote registries):** No local clone. Reads pool/node data via forge API (GitHub GraphQL). Zero local state — files fetched to ephemeral tmpdir for core functions that expect `Path` objects. This is the path a future timeline UI would share. **Implemented.**
 
-**RW (read-write, opt-in):** Persistent local clone with `.git`. Required for `add`, `pool init`, and other write operations. Clone location: user-specified `clone_path` or default `~/.cache/alph/clones/<sha256(url)[:12]>/`. Supports `auto_push` after commit.
+**RW (read-write, opt-in):** Persistent local clone with `.git`. Required for `add`, `pool init`, and other write operations. Clone location: user-specified `clone_path` or default `~/.cache/alph/clones/<sha256(url)[:12]>/`. Supports `auto_push` after commit. **Implemented.**
 
 Config:
 ```yaml
@@ -29,17 +31,19 @@ Local registries (`pool_home` is a filesystem path) ignore `mode` — always RW.
 URL format: `<git-remote-url>:/<subpath>`. The `:/subpath` suffix scopes the registry to a subdirectory within the repo. Detection: starts with `git@`, `ssh://`, `git://`, or `https://...*.git`.
 
 Provider abstraction for RO reads:
-- `GitHubProvider` — GraphQL batch reads (2 API calls for a full pool of 50 nodes)
-- `GitLabProvider` / `BitbucketProvider` — REST APIs (~51 calls for 50 nodes)
-- `GitFallbackProvider` — shallow sparse clone to tmpdir for unknown hosts
+- `GitHubProvider` — GraphQL batch reads (2 API calls for a full pool of 50 nodes) **Implemented.**
+- `GitLabProvider` / `BitbucketProvider` — REST APIs (~51 calls for 50 nodes) **Deferred.**
+- `GitFallbackProvider` — shallow sparse clone to tmpdir for unknown hosts **Deferred.**
 
-Auth: `GITHUB_TOKEN` / `GITLAB_TOKEN` env vars → `gh auth token` → git credential helper.
+Auth: `GITHUB_TOKEN` / `GH_TOKEN` env vars → `gh auth token`. **Implemented.**
 
-Ad-hoc CLI usage: `alph --registry git@github.com:Org/repo.git:/path list` (ephemeral, not persisted to config).
+Ad-hoc CLI usage: `alph --registry git@github.com:Org/repo.git:/path list --pool vehicles` (ephemeral, not persisted to config). **Implemented.**
 
-New commands: `alph registry clone <id>`, `alph registry pull <id>`, `alph registry check <id>`.
+Commands: `alph registry clone <id>`, `alph registry pull <id>`, `alph registry check <id>`. **Implemented.**
 
-When a user runs a write operation against an RO remote registry, alph errors with: `error: registry <id> is read-only. Set mode: rw in config to enable writes.`
+`--pull` flag on `list`, `show`, `validate` pulls latest changes before reading (RW clones only). **Implemented.**
+
+When a user runs a write operation against an RO remote registry, alph errors with: `error: registry is read-only. Set mode: rw in config to enable writes.` **Implemented.**
 
 ### Unregistered Pool Notice
 
@@ -184,3 +188,4 @@ These don't have answers yet, just tension:
 - **Basic Memory as input adapter**: A Basic Memory vault is a directory of structured Markdown. A live pointer to a specific memory bank (with `provider: basic-memory-mcp`) is a natural adapter.
 - **Remote node creation (no local clone)**: The core CLI assumes a local checkout. For scenarios where no clone exists (serverless functions, Slack bots, PWA gateways), input adapters can commit directly via the GitHub Contents API. This was prototyped in the design phase (`commit_node_remote.py`) and should be revisited when building adapters that run outside a local environment.
 - **Human-readable filenames**: Include a slugified context in the filename (e.g., `2026-03-05-a1b2c3d4e5f6-token-rotation-decision.md`). Requires slugification logic, truncation (~500 char cap), unicode handling. Add as opt-in config when browsing repos feels painful in practice.
+- **Repomix for live code repository nodes**: [Repomix](https://github.com/yamadashy/repomix) packs an entire repository into a single LLM-friendly file. A live node pointing at a code repo could use repomix as a resolution strategy — instead of resolving to raw git content, resolve via `repomix` to produce a consolidated, token-optimized snapshot of the repo (or a scoped subset). Useful for "give the LLM this whole codebase as context" workflows. Could be a `provider: repomix` hint on live nodes with `resolves_to: single` (whole-repo pack) or `collection` (multi-path pack).

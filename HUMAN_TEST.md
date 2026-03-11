@@ -50,7 +50,7 @@ alph --help
 alph -h
 ```
 
-Expected: help shows top-level commands: `add`, `list`, `show`, `validate`, `registry`, `pool`, `config`, `defaults`.
+Expected: help shows top-level commands: `add`, `list`, `show`, `validate`, `registry`, `pool`, `config`, `defaults`, and global option `--registry`.
 Both `--help` and `-h` should work.
 
 ---
@@ -106,8 +106,8 @@ registries:
 alph registry list
 ```
 
-Expected: a table with `test-household`, `Test Household`, the context text,
-and the pool home directory path.
+Expected: a table with `test-household`, `Test Household`, mode `rw`, the context text,
+and the pool home directory path. Local registries always show `rw`.
 
 ### 2d. Create a pool inside the registry
 
@@ -448,7 +448,147 @@ Expected: `N nodes in pool <name> valid.` for all three.
 
 ---
 
-## 9. MCP Server — Smoke Test
+## 9. Remote Registry — RO Mode
+
+This section tests reading from a remote GitHub repository without a local clone.
+Requires a GitHub token (`GITHUB_TOKEN`, `GH_TOKEN`, or `gh auth login`).
+
+### 9a. Add a remote registry to config
+
+```bash
+cat >> ~/.config/alph/config.yaml << 'EOF'
+  remote-example:
+    pool_home: git@github.com:AlpheusCEF/multi-pool-repo-example.git:/registry
+    context: Remote demo registry (read-only).
+    mode: ro
+EOF
+```
+
+```bash
+alph registry list
+```
+
+Expected: two registries — `test-household` (mode `rw`) and `remote-example` (mode `ro`).
+
+### 9b. Check remote reachability
+
+```bash
+alph registry check remote-example
+```
+
+Expected: `ok: remote-example remote is reachable (git@github.com:AlpheusCEF/multi-pool-repo-example.git)`
+
+### 9c. List nodes from remote pool
+
+```bash
+alph list --pool git@github.com:AlpheusCEF/multi-pool-repo-example.git:/registry/vehicles
+```
+
+Expected: table of nodes fetched via GitHub GraphQL API. No local clone created.
+
+### 9d. Show a node from remote pool
+
+Copy a node ID from the list output above.
+
+```bash
+alph show <paste-id-here> --pool git@github.com:AlpheusCEF/multi-pool-repo-example.git:/registry/vehicles
+```
+
+Expected: full node display with all fields.
+
+### 9e. Validate remote pool
+
+```bash
+alph validate --pool git@github.com:AlpheusCEF/multi-pool-repo-example.git:/registry/vehicles
+```
+
+Expected: `N nodes in pool ... valid.`
+
+### 9f. Write to RO pool errors correctly
+
+```bash
+alph add -c "Should fail." \
+  --pool git@github.com:AlpheusCEF/multi-pool-repo-example.git:/registry/vehicles \
+  --creator test@example.com
+```
+
+Expected: `error: registry is read-only. Set mode: rw in config to enable writes.`
+
+### 9g. Ad-hoc --registry flag
+
+```bash
+alph --registry git@github.com:AlpheusCEF/multi-pool-repo-example.git:/registry list --pool vehicles
+```
+
+Expected: same node list as 9c, using the global `--registry` flag instead of a full URL in `--pool`.
+
+---
+
+## 10. Remote Registry — RW Mode (Clone-Based)
+
+### 10a. Clone a remote registry
+
+Edit config to add an RW remote registry:
+
+```bash
+cat >> ~/.config/alph/config.yaml << 'EOF'
+  remote-rw:
+    pool_home: git@github.com:AlpheusCEF/multi-pool-repo-example.git:/registry
+    context: Remote demo registry (read-write clone).
+    mode: rw
+    clone_path: /tmp/alph-test-clone
+EOF
+```
+
+```bash
+alph registry clone remote-rw
+```
+
+Expected: `cloned: remote-rw -> /tmp/alph-test-clone`
+
+```bash
+ls /tmp/alph-test-clone/registry/
+```
+
+Expected: pool directories (vehicles, appliances, remodeling).
+
+### 10b. Pull latest changes
+
+```bash
+alph registry pull remote-rw
+```
+
+Expected: `pulled: remote-rw (/tmp/alph-test-clone)`
+
+### 10c. List with --pull flag
+
+```bash
+alph list --pool git@github.com:AlpheusCEF/multi-pool-repo-example.git:/registry/vehicles --pull
+```
+
+Expected: pulls latest changes, then lists nodes from the local clone.
+
+### 10d. Write to RW remote pool
+
+```bash
+alph add -c "Test node from RW clone." \
+  --pool git@github.com:AlpheusCEF/multi-pool-repo-example.git:/registry/vehicles \
+  --creator test@example.com
+```
+
+Expected: `node created: <id>`. Node file written to `/tmp/alph-test-clone/registry/vehicles/snapshots/`.
+
+### 10e. Clean up
+
+```bash
+rm -rf /tmp/alph-test-clone
+```
+
+Remove the `remote-example` and `remote-rw` entries from `~/.config/alph/config.yaml`.
+
+---
+
+## 11. MCP Server — Smoke Test
 
 ```bash
 alph-mcp &
@@ -481,7 +621,7 @@ Expected: Claude calls `list_pool_nodes` and returns the 10 remodeling nodes.
 
 ---
 
-## 10. CI Check
+## 12. CI Check
 
 ```bash
 cd /Users/cpettet/git/chasemp/AlpheusCEF/alph-cli
@@ -496,7 +636,7 @@ Expected: tests, mypy, ruff all passing.
 
 ---
 
-## 11. Homebrew Formula
+## 13. Homebrew Formula
 
 ```bash
 cd /Users/cpettet/git/chasemp/AlpheusCEF/homebrew-tap
@@ -516,7 +656,7 @@ alph-mcp --help
 
 ---
 
-## 12. Setup: HOMEBREW_TAP_TOKEN (for future releases)
+## 14. Setup: HOMEBREW_TAP_TOKEN (for future releases)
 
 For automatic formula updates on every release, add a PAT to the alph-cli repo:
 
@@ -532,17 +672,22 @@ will automatically update the formula in homebrew-tap via the release workflow.
 
 ## Checklist
 
+### Install and Help
 - [ ] `brew install alph` works cleanly
 - [ ] Both `alph` and `alph-mcp` binaries in PATH
 - [ ] `alph --version` prints `alph 0.1.x`
-- [ ] `alph --help` shows: `add`, `list`, `show`, `validate`, `registry`, `pool`, `config`, `defaults`
+- [ ] `alph --help` shows: `add`, `list`, `show`, `validate`, `registry`, `pool`, `config`, `defaults`, `--registry`
+
+### Registry and Pool Setup
 - [ ] `alph registry init` sets default when no default exists; reports full expanded pool home and config path
-- [ ] `alph registry list` shows registry ID, name, context, pool home path
+- [ ] `alph registry list` shows registry ID, name, mode (rw/ro), context, pool home path
 - [ ] `alph pool init --registry <id>` finds registry from global config by ID
 - [ ] `alph pool init --registry ghost` errors and shows known registries
 - [ ] `alph pool list` lists pools in the default registry with registry, name, type, context, path
 - [ ] `alph pool list --registry <id>` lists pools in the specified registry
-- [ ] `alph add` deduplicates correctly (same context → "duplicate: node already exists")
+
+### Node Operations
+- [ ] `alph add` deduplicates correctly (same context -> "duplicate: node already exists")
 - [ ] `alph add` with `$` in context: use single quotes to prevent bash expansion
 - [ ] `alph list` default shows active only; `-s archived` shows only archived (exclusive); `-s all` shows everything; `-s foo,bar` comma-separation works
 - [ ] `alph list -o json` outputs JSON array; `-o csv` outputs CSV with header row
@@ -554,15 +699,38 @@ will automatically update the formula in homebrew-tap via the release workflow.
 - [ ] `alph validate` on empty pool prints `no nodes found in pool <name>.`
 - [ ] Short aliases work: `alph l`, `alph a`, `alph s`, `alph v`
 - [ ] Per-command `-v`/`--verbose` flag works: `alph list -v`, `alph validate -v`
+
+### Config Defaults
 - [ ] Config defaults (`default_registry`, `default_pool`, `creator`) resolve correctly
 - [ ] `alph add` / `alph list` work without `--pool` / `--creator` when config set
 - [ ] `alph config list` shows config discovery tree with exists/missing status
 - [ ] `alph config show <path>` displays YAML with syntax highlighting
 - [ ] `alph config show <missing-path>` shows "not found" + hints to `registry init` and `alph defaults` (no template dump)
 - [ ] `alph defaults` shows resolved creator, registry, pool, auto_commit, and resolved pool path; unset values show as `not set`
+
+### Demo Registry
 - [ ] Demo registry seeds 28 nodes cleanly
 - [ ] Cross-pool `related:` field renders correctly on show
+
+### Remote Registry — RO Mode
+- [ ] `alph registry list` shows `ro` for remote and `rw` for local registries
+- [ ] `alph registry check <id>` verifies remote reachability
+- [ ] `alph list --pool <remote-url>` fetches nodes via GitHub API (no local clone)
+- [ ] `alph show <id> --pool <remote-url>` displays remote node content
+- [ ] `alph validate --pool <remote-url>` validates remote pool
+- [ ] `alph add` against RO remote pool errors: "registry is read-only"
+- [ ] `alph --registry <remote-url> list --pool <name>` works (ad-hoc global option)
+
+### Remote Registry — RW Mode
+- [ ] `alph registry clone <id>` creates local clone of remote registry
+- [ ] `alph registry pull <id>` pulls latest changes in clone
+- [ ] `alph list --pool <remote-url> --pull` pulls before listing (RW clones)
+- [ ] `alph add` against RW remote pool creates node in local clone
+
+### MCP Server
 - [ ] `alph-mcp` starts without error
 - [ ] `claude mcp add --scope user alph -- alph-mcp` registers the server
 - [ ] MCP tools callable from Claude Code session
+
+### CI and Distribution
 - [ ] CI green on GitHub Actions
