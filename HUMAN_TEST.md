@@ -50,11 +50,12 @@ alph --help
 alph -h
 ```
 
-Expected: help shows top-level commands: `add`, `list`, `show`, `validate`, `registry`, `pool`, `config`, `defaults`, and global options `--registry` and `--branch`.
+Expected: help shows top-level commands: `add`, `list`, `show`, `validate`, `registry`, `pool`, `config`, `defaults`, and global options `--registry` (`-r`/`--reg`), `--branch`, and `--pool` (`-p`).
 Both `--help` and `-h` should work.
 
 Note: `--registry` and `--branch` are **global options** — they must appear
 before the subcommand (e.g., `alph --branch seeded list`, not `alph list --branch seeded`).
+`-r` and `-p` work on both global and per-command options.
 
 ---
 
@@ -320,6 +321,20 @@ alph s <paste-id-here> --pool /tmp/alph-test/registry/vehicles
 
 Expected: same output as `alph show` (short alias).
 
+### Short flag aliases
+
+```bash
+alph pool list -r test-household
+```
+
+Expected: same output as `alph pool list --registry test-household`.
+
+```bash
+alph list -p /tmp/alph-test/registry/vehicles
+```
+
+Expected: same output as `alph list --pool /tmp/alph-test/registry/vehicles`.
+
 ---
 
 ## 5. CLI — Config Defaults (optional but recommended for daily use)
@@ -370,6 +385,12 @@ Expected: table including the Valvoline oil change node.
 ---
 
 ## 6. CLI — Config Discovery
+
+```bash
+alph config
+```
+
+Expected: same output as `alph config list` (defaults to list when no subcommand given).
 
 ```bash
 alph config list
@@ -819,7 +840,7 @@ will automatically update the formula in homebrew-tap via the release workflow.
 - [ ] `brew install alph` works cleanly
 - [ ] Both `alph` and `alph-mcp` binaries in PATH
 - [ ] `alph --version` prints `alph 0.1.x`
-- [ ] `alph --help` shows: `add`, `list`, `show`, `validate`, `registry`, `pool`, `config`, `defaults`, global options `--registry` and `--branch`
+- [ ] `alph --help` shows: `add`, `list`, `show`, `validate`, `registry`, `pool`, `config`, `defaults`, global options `--registry` (`-r`/`--reg`), `--branch`, `--pool` (`-p`)
 
 ### Registry and Pool Setup
 - [ ] `alph registry init` sets default when no default exists; reports full expanded pool home and config path
@@ -828,12 +849,20 @@ will automatically update the formula in homebrew-tap via the release workflow.
 - [ ] `alph pool` (no subcommand) defaults to `pool list`
 - [ ] `alph reg list` works as shorthand for `alph registry list`
 - [ ] `alph reg` defaults to list (same as `alph registry`)
+- [ ] `alph config` (no subcommand) defaults to `config list`
+- [ ] `-r` and `--reg` work as aliases for `--registry` (global and per-command)
+- [ ] `-p` works as alias for `--pool`
 - [ ] `alph pool init --registry <id>` finds registry from global config by ID
 - [ ] `alph pool init --registry ghost` errors and shows known registries
 - [ ] `alph pool list` lists pools in the default registry with registry, name, type, context, path
 - [ ] `alph pool list --registry <id>` lists pools in the specified registry
 - [ ] `alph pool list -v` shows `source` column (configured vs discovered) for pools found on disk but not in config
 - [ ] Reserved names: `alph registry init --id all` and `alph pool init --name all` both error
+- [ ] `alph pool init` on duplicate pool name errors: "already exists"
+- [ ] `alph pool init` on RO remote registry errors: "read-only"
+- [ ] `alph pool init` on RW remote without clone errors: "run registry clone first"
+- [ ] `alph pool init` on RW remote with clone creates pool at clone_path + subpath
+- [ ] Config key order preserved after pool init (no reordering of registries)
 
 ### Node Operations
 - [ ] `alph add` deduplicates correctly (same context -> "duplicate: node already exists")

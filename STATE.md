@@ -209,7 +209,7 @@ Registries are declared in the alph config file alongside other settings. All re
 | `alph config show <path>` | | Display a config file with syntax highlighting |
 | `alph defaults` | | Show resolved creator, registry, pool, and pool path from current config |
 
-Global options: `alph --registry <id-or-url>` scopes pool resolution to a specific registry for one invocation. `alph --branch <name>` overrides the git branch for remote operations. Both accept a registry ID/name or a remote git URL. Global options must appear before the subcommand.
+Global options: `alph --registry <id-or-url>` (also `-r`, `--reg`) scopes pool resolution to a specific registry for one invocation. `alph --branch <name>` overrides the git branch for remote operations. `--pool` accepts `-p`. Global options must appear before the subcommand.
 
 `alph add` creates files locally and optionally auto-commits (`auto_commit: true` in config). For remote RW registries, `auto_push: true` pushes after commit. The commit message follows the convention `alph: add <type> node <id>`.
 
@@ -298,22 +298,22 @@ Python 3.12+, Poetry for dependency management, FastMCP 3.x for the MCP server l
 
 ## What Has Been Built
 
-Phase 1, Phase 2, and remote registry support are complete. The project is at v0.1.21 (Homebrew).
+Phase 1, Phase 2, and remote registry support are complete. The project is at v0.1.22 (Homebrew).
 
 ### Core Engine (`alph-cli` repo, `src/alph/`)
 
 - **`core.py`**: All production logic. Framework-agnostic. Fully type-annotated (mypy strict). Functions: `load_config`, `init_registry`, `init_pool`, `create_node`, `generate_id`, `check_idempotency`, `validate_node`, `validate_pool`, `check_git_state`, `list_nodes`, `list_pools`, `show_node`, `resolve_pool_name`, `collect_registries`, `find_registry_config`, `is_remote_registry`, `parse_remote_registry`, `effective_mode`.
 - **`remote.py`**: Remote registry access. `GitHubProvider` (GraphQL batch reads), `RemoteProvider` protocol, `resolve_pool_readonly` (ephemeral tmpdir), clone management (`clone_remote_registry`, `pull_remote_registry`, `push_remote_registry`, `default_clone_dir`). SSH host alias resolution via `~/.ssh/config` — URLs like `git@github-personal:org/repo.git` are correctly identified when the alias maps to `github.com`.
-- **`cli.py`**: Typer wrapper. Commands: `registry init`, `registry list`, `registry check` (including `check all`), `registry clone`, `registry pull`, `registry status`, `pool init`, `pool list`, `add` (`a`), `list` (`l`), `show` (`s`), `validate` (`v`), `config list`, `config show`, `defaults`. `reg` is a shorthand for `registry`; `registry` and `pool` with no subcommand default to `list`. Global `--registry` and `--branch` options. Per-command `-v`/`--verbose` flag and `--pull` flag on read commands. Default registry/pool resolution from config with remote URL support. Reserved names (`all`) rejected by `registry init` and `pool init`.
+- **`cli.py`**: Typer wrapper. Commands: `registry init`, `registry list`, `registry check` (including `check all`), `registry clone`, `registry pull`, `registry status`, `pool init`, `pool list`, `add` (`a`), `list` (`l`), `show` (`s`), `validate` (`v`), `config list`, `config show`, `defaults`. `reg` is a shorthand for `registry`; `registry`, `pool`, and `config` with no subcommand default to `list`. Global `--registry` (`-r`/`--reg`) and `--branch` options; `--pool` accepts `-p`. Per-command `-v`/`--verbose` flag and `--pull` flag on read commands. Default registry/pool resolution from config with remote URL support. Reserved names (`all`) rejected by `registry init` and `pool init`.
 - **`mcp_server.py`**: FastMCP 3.x wrapper. One tool per core function. Detailed docstrings, MCP annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`), dual output (`text` + `json`). Transparent remote pool support via `_resolve_pool` context manager.
 
 ### Test Suite
 
-272 tests passing. Full TDD — every production function written test-first. mypy strict clean, ruff clean.
+278 tests passing. Full TDD — every production function written test-first. mypy strict clean, ruff clean.
 
 ### Distribution
 
-- **Homebrew tap**: `AlpheusCEF/homebrew-tap`, formula at v0.1.21. `brew tap AlpheusCEF/tap && brew install alph` installs both `alph` and `alph-mcp` binaries. Formula uses `preserve_rpath` to avoid Rust-extension dylib relocation issues.
+- **Homebrew tap**: `AlpheusCEF/homebrew-tap`, formula at v0.1.22. `brew tap AlpheusCEF/tap && brew install alph` installs both `alph` and `alph-mcp` binaries. Formula uses `preserve_rpath` to avoid Rust-extension dylib relocation issues.
 - **GitHub Actions**: CI runs tests, mypy, ruff on every push/PR. Release workflow builds sdist and updates homebrew-tap formula automatically on tag.
 
 ### SKILL.md
