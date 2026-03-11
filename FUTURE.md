@@ -121,7 +121,7 @@ Reference material for when we get here:
 
 ### Homebrew Distribution
 
-> **Status**: Complete. `AlpheusCEF/homebrew-tap` ships `brew install alph` (v0.1.19). Release workflow auto-builds sdist; formula updated manually until `HOMEBREW_TAP_TOKEN` is configured.
+> **Status**: Complete. `AlpheusCEF/homebrew-tap` ships `brew install alph` (v0.1.20). Release workflow auto-builds sdist; formula updated manually until `HOMEBREW_TAP_TOKEN` is configured.
 
 ### Multi-LLM Frontend
 
