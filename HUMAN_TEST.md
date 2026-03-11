@@ -461,8 +461,13 @@ cat >> ~/.config/alph/config.yaml << 'EOF'
     pool_home: git@github.com:AlpheusCEF/multi-pool-repo-example.git:/registry
     context: Remote demo registry (read-only).
     mode: ro
+    branch: seeded
 EOF
 ```
+
+Note: `branch: seeded` points RO reads at the `seeded` branch, which contains
+generated node data. The `main` branch has only `seed.py` and `seed.yaml`
+(the `registry/` directory is gitignored there).
 
 ```bash
 alph registry list
@@ -547,12 +552,48 @@ alph registry clone remote-rw
 Expected: `cloned: remote-rw -> /tmp/alph-test-clone`
 
 ```bash
+alph registry clone remote-rw
+```
+
+Expected: `ok: remote-rw already cloned at /tmp/alph-test-clone`
+(Second clone is a no-op with a distinct message.)
+
+```bash
 ls /tmp/alph-test-clone/registry/
 ```
 
 Expected: pool directories (vehicles, appliances, remodeling).
 
-### 10b. Pull latest changes
+### 10b. Registry status
+
+```bash
+alph registry status remote-rw
+```
+
+Expected:
+```
+registry:    remote-rw
+mode:        rw
+remote:      git@github.com:AlpheusCEF/multi-pool-repo-example.git
+subpath:     registry
+clone_path:  /tmp/alph-test-clone
+clone_state: cloned (clean)
+auto_push:   false
+```
+
+```bash
+alph registry status test-household
+```
+
+Expected:
+```
+registry:    test-household
+mode:        rw
+path:        /tmp/alph-test/registry
+exists:      true
+```
+
+### 10c. Pull latest changes
 
 ```bash
 alph registry pull remote-rw
@@ -560,7 +601,7 @@ alph registry pull remote-rw
 
 Expected: `pulled: remote-rw (/tmp/alph-test-clone)`
 
-### 10c. List with --pull flag
+### 10d. List with --pull flag
 
 ```bash
 alph list --pool git@github.com:AlpheusCEF/multi-pool-repo-example.git:/registry/vehicles --pull
@@ -568,7 +609,7 @@ alph list --pool git@github.com:AlpheusCEF/multi-pool-repo-example.git:/registry
 
 Expected: pulls latest changes, then lists nodes from the local clone.
 
-### 10d. Write to RW remote pool
+### 10e. Write to RW remote pool
 
 ```bash
 alph add -c "Test node from RW clone." \
@@ -578,7 +619,7 @@ alph add -c "Test node from RW clone." \
 
 Expected: `node created: <id>`. Node file written to `/tmp/alph-test-clone/registry/vehicles/snapshots/`.
 
-### 10e. Clean up
+### 10f. Clean up
 
 ```bash
 rm -rf /tmp/alph-test-clone
@@ -715,6 +756,7 @@ will automatically update the formula in homebrew-tap via the release workflow.
 ### Remote Registry — RO Mode
 - [ ] `alph registry list` shows `ro` for remote and `rw` for local registries
 - [ ] `alph registry check <id>` verifies remote reachability
+- [ ] `branch: seeded` in config directs RO reads to the seeded branch
 - [ ] `alph list --pool <remote-url>` fetches nodes via GitHub API (no local clone)
 - [ ] `alph show <id> --pool <remote-url>` displays remote node content
 - [ ] `alph validate --pool <remote-url>` validates remote pool
@@ -723,6 +765,9 @@ will automatically update the formula in homebrew-tap via the release workflow.
 
 ### Remote Registry — RW Mode
 - [ ] `alph registry clone <id>` creates local clone of remote registry
+- [ ] Second `alph registry clone <id>` prints "already cloned" (not "cloned")
+- [ ] `alph registry status <id>` shows mode, remote, clone state, auto_push for remote registries
+- [ ] `alph registry status <id>` shows path and exists for local registries
 - [ ] `alph registry pull <id>` pulls latest changes in clone
 - [ ] `alph list --pool <remote-url> --pull` pulls before listing (RW clones)
 - [ ] `alph add` against RW remote pool creates node in local clone
