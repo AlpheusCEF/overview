@@ -299,7 +299,7 @@ Python 3.12+, Poetry for dependency management, FastMCP 3.x for the MCP server l
 
 ## What Has Been Built
 
-Phase 1, Phase 2, and remote registry support are complete. The project is at v0.1.33 (Homebrew).
+Phase 1, Phase 2, and remote registry support are complete. The project is at v0.1.34 (Homebrew).
 
 ### Core Engine (`alph-cli` repo, `src/alph/`)
 
@@ -315,7 +315,7 @@ Phase 1, Phase 2, and remote registry support are complete. The project is at v0
 
 ### Distribution
 
-- **Homebrew tap**: `AlpheusCEF/homebrew-tap`, formula at v0.1.33. `brew tap AlpheusCEF/tap && brew install alph` installs `alph`, `alph-mcp` binaries, `man alph` man page, and zsh/bash/fish tab completion scripts. Formula uses `preserve_rpath` to avoid Rust-extension dylib relocation issues. Completion scripts are generated at install time via `_ALPH_COMPLETE=source_<shell>` with leading-newline stripping. Formula includes a `caveats` block explaining `fpath` setup for zsh (including Oh My Zsh timing considerations).
+- **Homebrew tap**: `AlpheusCEF/homebrew-tap`, formula at v0.1.34. `brew tap AlpheusCEF/tap && brew install alph` installs `alph`, `alph-mcp` binaries, `man alph` man page, and zsh/bash/fish tab completion scripts. Formula uses `preserve_rpath` to avoid Rust-extension dylib relocation issues. Completion scripts are generated at install time via `_ALPH_COMPLETE=source_<shell>` with leading-newline stripping. Formula includes a `caveats` block explaining `fpath` setup for zsh (including Oh My Zsh timing considerations).
 - **GitHub Actions**: CI runs tests, mypy, ruff on every push/PR. Release workflow builds sdist and updates homebrew-tap formula automatically on tag.
 
 ### SKILL.md
