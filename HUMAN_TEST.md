@@ -969,7 +969,7 @@ Remove the `remote-example` and `remote-rw` entries from `~/.config/alph/config.
 Install completion for your shell (run once):
 
 ```bash
-alph --install-completion zsh   # or bash, fish
+alph completions install zsh    # or bash, fish
 ```
 
 Then reload your shell (`exec zsh` or open a new terminal).
@@ -1029,7 +1029,8 @@ Cache files live at `~/.cache/alph/completion/<hash>.json`.
 
 ### Checklist
 
-- [ ] `alph --install-completion zsh` (or your shell) installs without error
+- [ ] `alph completions install zsh` (or your shell) installs without error
+- [ ] `alph completions show zsh` prints the completion script to stdout
 - [ ] Registry ID tab completion returns all configured IDs + `all`
 - [ ] Registry ID completion filters by prefix
 - [ ] Pool tab completion returns pool names from local registries
