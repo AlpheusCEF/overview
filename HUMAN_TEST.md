@@ -238,6 +238,23 @@ alph pool init \
 
 Expected: error — `'all' is a reserved name and cannot be used as a pool name`.
 
+```bash
+alph registry init \
+  --id alph \
+  --context "Should fail."
+```
+
+Expected: error — `'alph' is a reserved name and cannot be used as a registry ID`.
+
+```bash
+alph pool init \
+  --registry test-household \
+  --name alph \
+  --context "Should fail."
+```
+
+Expected: error — `'alph' is a reserved name and cannot be used as a pool name`.
+
 ### 2j. Registry commands default to default_registry
 
 ```bash
@@ -507,7 +524,37 @@ open(p, 'w').write(yaml.dump(d, sort_keys=False))
 "
 ```
 
-### 6b. Config show-all — merged config with defaults
+### 6b. Config check — referential integrity
+
+```bash
+# Temporarily set default_registry to a nonexistent registry
+python3 -c "
+import yaml
+p = '$HOME/.config/alph/config.yaml'.replace('$HOME', __import__('os').path.expanduser('~'))
+d = yaml.safe_load(open(p))
+d['default_registry'] = 'does-not-exist'
+open(p, 'w').write(yaml.dump(d, sort_keys=False))
+"
+alph config check
+```
+
+Expected: `warning: default_registry 'does-not-exist' is not declared in any config file` followed by `1 issue found.` Exit code 1.
+
+```bash
+# Restore
+python3 -c "
+import yaml
+p = '$HOME/.config/alph/config.yaml'.replace('$HOME', __import__('os').path.expanduser('~'))
+d = yaml.safe_load(open(p))
+d['default_registry'] = 'test-household'
+open(p, 'w').write(yaml.dump(d, sort_keys=False))
+"
+alph config check
+```
+
+Expected: `ok: all config files use recognized keys.`
+
+### 6c. Config show-all — merged config with defaults
 
 ```bash
 alph config show-all
@@ -517,7 +564,7 @@ Expected: YAML output with syntax highlighting showing the fully merged config.
 All implicit defaults are filled in — `auto_commit: false`, `register_subdir_pools: false`,
 `mode: rw` (for local registries), `auto_push: false`, `auto_pull: false`, etc.
 
-### 6c. defaults_reminder
+### 6d. defaults_reminder
 
 To suppress the "not set as default" hint that appears when `alph registry init` is run
 and a default already exists, add to `~/.config/alph/config.yaml`:
