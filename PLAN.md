@@ -171,7 +171,7 @@ Remote registries allow `pool_home` to be a git URL instead of a local path.
 - [x] `resolve_pool_readonly()` — fetch pool to ephemeral tmpdir via provider API
 - [x] `default_clone_dir()` — `~/.cache/alph/clones/<sha256(url)[:12]>/`
 - [x] `clone_remote_registry()` — shallow git clone for RW access
-- [x] `pull_remote_registry()` — git pull --ff-only
+- [x] `pull_remote_registry()` — git pull --rebase
 - [x] `push_remote_registry()` — git push
 
 ### 2.5.4 CLI Integration (cli.py)

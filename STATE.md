@@ -1,6 +1,6 @@
 # AlpheusCEF: State of the Project
 
-**Date**: 2026-03-11
+**Date**: 2026-03-12
 **Status**: Phase 1, Phase 2 (distribution + MCP), and remote registry support complete and shipping
 
 ---
@@ -78,7 +78,7 @@ Every node has a common core in its YAML frontmatter:
 | `schema_version` | Yes | Schema version (starts at `"1"`) |
 | `id` | Yes | 12-char SHA-256 hash (of source + context; timestamp excluded for idempotency) |
 | `timestamp` | Yes | ISO-8601 creation time |
-| `source` | Yes | Originating system (cli, slack, google_docs) |
+| `source` | Yes | Originating system — UA-style string (e.g. `alph-cli/v0.1.26`, `alph-mcp/v0.1.26`, `slack`) |
 | `node_type` | Yes | `snapshot` or `live` |
 | `context` | Yes | Human/LLM-readable description of this node |
 | `creator` | Yes | Who created the node (defaults to user's email) |
@@ -180,7 +180,7 @@ Three levels, each overriding the previous:
 
 | Level | Location | Contents |
 |-------|----------|----------|
-| Global | `~/.config/alph/config.yaml` | Creator email, auto_commit, default registry, default pool, registry declarations (including mode, clone_path, auto_push, auto_pull, branch for remote registries) |
+| Global | `~/.config/alph/config.yaml` | Creator email, auto_commit, default registry, default pool, defaults_reminder, registry declarations (including mode, clone_path, auto_push, auto_pull, branch, ssh_command for remote registries) |
 | Local walk-up | `config.yaml` files from cwd upward to root | Project or directory-specific overrides; most-specific (nearest to cwd) wins |
 | CLI flags | `--pool`, `--creator`, `-c`, etc. | Per-invocation overrides |
 
@@ -250,15 +250,16 @@ Python 3.12+, Poetry for dependency management, FastMCP 3.x for the MCP server l
 - Snapshot/live node distinction; live nodes support single and collection resolution
 - `schema_version` field in frontmatter from day one
 - `creator` field (defaults to email) for attribution and idempotency messages
-- Deterministic IDs from `sha256(source + context)[:12]` for idempotency (timestamp excluded so re-submitting identical context produces the same ID)
+- Deterministic IDs from `sha256(source + context)[:12]` for idempotency (timestamp excluded; version suffix stripped from UA-style source before hashing so `alph-cli/v0.1.24` and `alph-cli/v0.1.99` produce the same ID for the same context)
 - Registries have IDs and optional names; declared in alph config as peers
 - Pool separation declared at registry level; subdirectory default (`subdir`), repo override per pool
 - Config hierarchy: global (`~/.config/alph/config.yaml`) -> local walk-up (config.yaml files from cwd upward, most specific wins) -> CLI flags
 - Default registry and default pool in config for daily-use simplicity
 - Core logic in `core.py`, exposed via FastMCP server + CLI wrapper
 - SKILL.md installed once at user level, references MCP tools
-- Auto-commit on add (opt-in via config); `auto_push` and `auto_pull` default to `true` for RW remote registries (explicit `false` overrides), default to `false` for local registries (explicit `true` enables); `--ff-only` for all pulls
-- Remote registries: two-mode architecture (RO via GitHub GraphQL API, RW via local clone); `mode: ro | rw` config per registry; `auto_push` for RW remotes; SSH host aliases resolved via `~/.ssh/config` for forge detection
+- Auto-commit on add (opt-in via config); `auto_push` and `auto_pull` default to `true` for RW remote registries (explicit `false` overrides), default to `false` for local registries (explicit `true` enables); `git pull --rebase` for all pulls (handles diverged branches from multiple writers)
+- Remote registries: two-mode architecture (RO via GitHub GraphQL API, RW via local clone); `mode: ro | rw` config per registry; `auto_push` for RW remotes; SSH host aliases resolved via `~/.ssh/config` for forge detection; `ssh_command` registry key sets `GIT_SSH_COMMAND` for all git ops on that registry
+- `defaults_reminder: false` top-level config key suppresses the "not set as default" hint printed by `alph registry init`
 - Reserved names: `all` is reserved and cannot be used as a registry ID or pool name
 - Validator checks both nodes and registry
 - `alph list` and `alph show` for human inspection
@@ -298,23 +299,23 @@ Python 3.12+, Poetry for dependency management, FastMCP 3.x for the MCP server l
 
 ## What Has Been Built
 
-Phase 1, Phase 2, and remote registry support are complete. The project is at v0.1.24 (Homebrew).
+Phase 1, Phase 2, and remote registry support are complete. The project is at v0.1.26 (Homebrew).
 
 ### Core Engine (`alph-cli` repo, `src/alph/`)
 
 - **`core.py`**: All production logic. Framework-agnostic. Fully type-annotated (mypy strict). Functions: `load_config`, `init_registry`, `init_pool`, `create_node`, `generate_id`, `check_idempotency`, `validate_node`, `validate_pool`, `validate_config_keys`, `check_git_state`, `list_nodes`, `list_pools`, `show_node`, `resolve_pool_name`, `collect_registries`, `find_registry_config`, `is_remote_registry`, `parse_remote_registry`, `effective_mode`. Pool dotfiles (`.alph.yaml`) for pool-local metadata; `register_subdir_pools` config key controls whether subdir pools also get config entries (default: false).
-- **`remote.py`**: Remote registry access. `GitHubProvider` (GraphQL batch reads), `RemoteProvider` protocol, `resolve_pool_readonly` (ephemeral tmpdir), clone management (`clone_remote_registry`, `pull_remote_registry`, `push_remote_registry`, `default_clone_dir`). SSH host alias resolution via `~/.ssh/config` — URLs like `git@github-personal:org/repo.git` are correctly identified when the alias maps to `github.com`.
+- **`remote.py`**: Remote registry access. `GitHubProvider` (GraphQL batch reads), `RemoteProvider` protocol, `resolve_pool_readonly` (ephemeral tmpdir), clone management (`clone_remote_registry`, `pull_remote_registry`, `push_remote_registry`, `default_clone_dir`). SSH host alias resolution via `~/.ssh/config` — URLs like `git@github-personal:org/repo.git` are correctly identified when the alias maps to `github.com`. All three git ops accept `ssh_command=` to inject `GIT_SSH_COMMAND` into the subprocess env. Pull uses `--rebase` (replaced `--ff-only`) to handle diverged branches from multiple writers.
 - **`cli.py`**: Typer wrapper. Commands: `registry init`, `registry list`, `registry check` (including `check all`), `registry clone`, `registry pull`, `registry status`, `pool init`, `pool list`, `add` (`a`), `list` (`l`), `show` (`s`), `validate` (`v`), `config list`, `config show`, `config check`, `config show-all`, `defaults`, `examples` (hidden). `reg` is a shorthand for `registry`; `registry`, `pool`, and `config` with no subcommand default to `list`. Registry commands (`check`, `clone`, `pull`, `status`) default to `default_registry` when no argument given. Global `--registry` (`-r`/`--reg`) and `--branch` options; `--pool` accepts `-p`. Per-command `-v`/`--verbose` flag and `--pull` flag on read commands. Default registry/pool resolution from config with remote URL support. Reserved names (`all`) rejected by `registry init` and `pool init`.
 - **`mcp_server.py`**: FastMCP 3.x wrapper. One tool per core function. Detailed docstrings, MCP annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`), dual output (`text` + `json`). Transparent remote pool support via `_resolve_pool` context manager.
 - **`man/alph.1`**: Comprehensive man page covering all commands, config keys, node schema, environment variables, and examples. Installed by Homebrew formula.
 
 ### Test Suite
 
-300 tests passing. Full TDD — every production function written test-first. mypy strict clean, ruff clean.
+298 tests passing. Full TDD — every production function written test-first. mypy strict clean, ruff clean.
 
 ### Distribution
 
-- **Homebrew tap**: `AlpheusCEF/homebrew-tap`, formula at v0.1.24. `brew tap AlpheusCEF/tap && brew install alph` installs `alph`, `alph-mcp` binaries, and `man alph` man page. Formula uses `preserve_rpath` to avoid Rust-extension dylib relocation issues.
+- **Homebrew tap**: `AlpheusCEF/homebrew-tap`, formula at v0.1.26. `brew tap AlpheusCEF/tap && brew install alph` installs `alph`, `alph-mcp` binaries, and `man alph` man page. Formula uses `preserve_rpath` to avoid Rust-extension dylib relocation issues.
 - **GitHub Actions**: CI runs tests, mypy, ruff on every push/PR. Release workflow builds sdist and updates homebrew-tap formula automatically on tag.
 
 ### SKILL.md

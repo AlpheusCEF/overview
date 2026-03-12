@@ -24,7 +24,7 @@ registries:
     mode: ro              # ro (default for remote) | rw
     branch: seeded        # git branch for RO reads and RW clone checkout (default: HEAD)
     clone_path: ~/regs/h  # only used when mode: rw
-    auto_pull: false      # pull --ff-only before read (default: true for rw remote, false for local)
+    auto_pull: false      # pull --rebase before read (default: true for rw remote, false for local)
     auto_push: false      # push after commit (default: true for rw remote, false for local)
 ```
 

@@ -354,7 +354,7 @@ For the next two commands, copy an ID from the list output above and substitute 
 alph show <paste-id-here> --pool /tmp/alph-test/registry/vehicles
 ```
 
-Expected: full node display with `id`, `context`, `type`, `source`, `creator`, `timestamp`.
+Expected: full node display with `id`, `context`, `type`, `source` (e.g. `alph-cli/v0.1.x`), `creator`, `timestamp`.
 
 ```bash
 alph l --pool /tmp/alph-test/registry/vehicles
@@ -517,6 +517,18 @@ Expected: YAML output with syntax highlighting showing the fully merged config.
 All implicit defaults are filled in — `auto_commit: false`, `register_subdir_pools: false`,
 `mode: rw` (for local registries), `auto_push: false`, `auto_pull: false`, etc.
 
+### 6c. defaults_reminder
+
+To suppress the "not set as default" hint that appears when `alph registry init` is run
+and a default already exists, add to `~/.config/alph/config.yaml`:
+
+```yaml
+defaults_reminder: false
+```
+
+Run `alph registry init` for a second registry — the hint block should not appear.
+Remove the key (or set it to `true`) to restore default behavior.
+
 ---
 
 ## 7. CLI — Validate
@@ -658,10 +670,21 @@ Note: `branch: seeded` points RO reads at the `seeded` branch, which contains
 generated node data. The `main` branch has only `seed.py` and `seed.yaml`
 (the `registry/` directory is gitignored there).
 
-If your SSH config uses a host alias (e.g., `Host github-personal` with
-`HostName github.com`), you can use that alias in the URL:
-`git@github-personal:AlpheusCEF/multi-pool-repo-example.git:/registry`.
-Alph resolves SSH aliases via `~/.ssh/config` to detect the forge correctly.
+**Multiple GitHub accounts / SSH key selection**: if you need a specific SSH key
+for this registry, add `ssh_command` to the registry entry:
+
+```yaml
+  remote-example:
+    pool_home: git@github.com:AlpheusCEF/multi-pool-repo-example.git:/registry
+    context: Remote demo registry (read-only).
+    mode: ro
+    branch: seeded
+    ssh_command: "ssh -i ~/.ssh/your_key -o IdentitiesOnly=yes"
+```
+
+Alph injects this as `GIT_SSH_COMMAND` for all git operations on that registry.
+SSH host aliases in URLs (e.g., `git@github-personal:...`) are also supported —
+alph resolves them via `~/.ssh/config` to detect the forge correctly.
 
 ```bash
 alph registry list
@@ -770,6 +793,17 @@ alph reg init \
 Note: `branch: seeded` is respected by both RO reads and RW clones. The clone
 will check out the `seeded` branch (which has the generated `registry/` data).
 
+If you need a specific SSH key for push/pull, add `ssh_command` manually to the
+config entry after `alph reg init`:
+
+```yaml
+  remote-rw:
+    # (other fields: pool_home, mode, branch, clone_path)
+    ssh_command: "ssh -i ~/.ssh/your_key -o IdentitiesOnly=yes"
+```
+
+This sets `GIT_SSH_COMMAND` for clone, pull, and push operations on this registry.
+
 ```bash
 alph registry clone remote-rw
 ```
@@ -831,6 +865,9 @@ alph registry pull remote-rw
 ```
 
 Expected: `pulled: remote-rw (/tmp/alph-test-clone)`
+
+Note: pull uses `git pull --rebase` to handle diverged branches (e.g., multiple
+writers pushed independently). `--ff-only` would abort in that case.
 
 ### 10d. List with --pull flag
 
@@ -979,6 +1016,8 @@ will automatically update the formula in homebrew-tap via the release workflow.
 
 ### Node Operations
 - [ ] `alph add` deduplicates correctly (same context -> "duplicate: node already exists")
+- [ ] `source` field on created nodes is UA-style (`alph-cli/vX.Y.Z`); visible in `alph show` output
+- [ ] Re-adding same context after version upgrade still deduplicates (version stripped from hash)
 - [ ] `alph add` with `$` in context: use single quotes to prevent bash expansion
 - [ ] `alph list` default shows active only; `-s archived` shows only archived (exclusive); `-s all` shows everything; `-s foo,bar` comma-separation works
 - [ ] `alph list -o json` outputs JSON array; `-o csv` outputs CSV with header row
@@ -1001,6 +1040,7 @@ will automatically update the formula in homebrew-tap via the release workflow.
 - [ ] `alph defaults` shows resolved creator, registry, pool, auto_commit, register_subdir_pools, and resolved pool path; unset values show as `not set`
 - [ ] `alph config check` reports `ok` for valid config; flags unknown/legacy keys with exit code 1
 - [ ] `alph config show-all` displays fully merged config with all implicit defaults resolved
+- [ ] `defaults_reminder: false` in config suppresses "not set as default" hint from `alph registry init`
 
 ### Registry Default Fallback
 - [ ] `alph registry check` (no argument) uses `default_registry`
@@ -1032,10 +1072,11 @@ will automatically update the formula in homebrew-tap via the release workflow.
 - [ ] `alph registry status <id>` shows mode, remote, clone state, auto_pull, auto_push for remote registries
 - [ ] `alph registry status <id>` shows path and exists for local registries
 - [ ] `auto_pull` and `auto_push` default to `true` for RW remote registries, `false` for local
-- [ ] `alph registry pull <id>` pulls latest changes in clone
+- [ ] `alph registry pull <id>` pulls latest changes in clone using `--rebase` (succeeds on diverged branches)
 - [ ] `alph list --pool <remote-url> --pull` pulls before listing (RW clones)
 - [ ] `alph add` against RW remote pool creates node in local clone
 - [ ] `alph validate` on local registries with auto_pull/auto_push checks git health (remote, clean tree)
+- [ ] `ssh_command` in registry config sets `GIT_SSH_COMMAND` for clone, pull, push (correct key used for push)
 
 ### MCP Server
 - [ ] `alph-mcp` starts without error
