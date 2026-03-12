@@ -974,6 +974,20 @@ alph completions install zsh    # or bash, fish
 
 Then reload your shell (`exec zsh` or open a new terminal).
 
+**Homebrew users**: completion scripts are installed automatically by `brew install alph`.
+You still need to ensure `fpath` includes the Homebrew site-functions directory.
+For Oh My Zsh, add this line **before** `source $ZSH/oh-my-zsh.sh` in `~/.zshrc`:
+
+```zsh
+fpath=(/opt/homebrew/share/zsh/site-functions $fpath)
+```
+
+If completion still does not work after adding the `fpath` line, clear the stale cache:
+
+```zsh
+rm -f ~/.zcompdump* && exec zsh
+```
+
 ### 11a. Registry ID completion
 
 ```
