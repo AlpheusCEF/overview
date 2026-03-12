@@ -43,6 +43,13 @@ alph --version
 Expected: `alph 0.1.x`
 
 ```bash
+man alph
+```
+
+Expected: comprehensive man page with NAME, SYNOPSIS, DESCRIPTION, GLOBAL OPTIONS,
+COMMANDS, CONFIGURATION, POOL STRUCTURE, NODE SCHEMA, ENVIRONMENT, FILES, EXAMPLES.
+
+```bash
 alph --help
 ```
 
@@ -51,7 +58,16 @@ alph -h
 ```
 
 Expected: help shows top-level commands: `add`, `list`, `show`, `validate`, `registry`, `pool`, `config`, `defaults`, and global options `--registry` (`-r`/`--reg`), `--branch`, and `--pool` (`-p`).
+Help text includes: `Run 'alph examples' for structured usage walkthroughs.`
 Both `--help` and `-h` should work.
+
+```bash
+alph examples
+```
+
+Expected: structured usage walkthroughs covering 7 scenarios: getting started,
+multiple pools, remote RO, remote RW, inspecting setup, filtering/output, short aliases.
+The `examples` command is hidden from `--help` but works when invoked directly.
 
 Note: `--registry` and `--branch` are **global options** — they must appear
 before the subcommand (e.g., `alph --branch seeded list`, not `alph list --branch seeded`).
@@ -136,6 +152,23 @@ ls /tmp/alph-test/registry/vehicles/
 
 Expected: `snapshots/  live/`
 
+```bash
+cat /tmp/alph-test/registry/vehicles/.alph.yaml
+```
+
+Expected:
+```yaml
+context: Vehicle maintenance and purchase records.
+creator: ''
+created: '2026-...'
+```
+
+Note: `pool init` always writes `.alph.yaml` inside the pool dir with `context`,
+`creator`, and `created` timestamp. By default (`register_subdir_pools: false`),
+subdir pools are NOT registered in the config YAML — they are discovered from
+the filesystem. Set `register_subdir_pools: true` in config to also write pool
+entries to the config file.
+
 ### 2e. List pools in the registry
 
 ```bash
@@ -204,6 +237,20 @@ alph pool init \
 ```
 
 Expected: error — `'all' is a reserved name and cannot be used as a pool name`.
+
+### 2j. Registry commands default to default_registry
+
+```bash
+alph registry check
+```
+
+Expected: checks `test-household` (the default registry) — no argument needed.
+
+```bash
+alph registry status
+```
+
+Expected: shows status for `test-household` — `mode: rw`, `path: /tmp/alph-test/registry`, `exists: true`.
 
 ---
 
@@ -418,8 +465,57 @@ alph defaults
 ```
 
 Expected: a summary of the currently resolved defaults — `creator`, `default_registry`,
-`default_pool`, `auto_commit`, and the resolved pool path. Values not yet configured
+`default_pool`, `auto_commit`, `register_subdir_pools`, and the resolved pool path. Values not yet configured
 show as `not set`.
+
+### 6a. Config check — unknown key detection
+
+```bash
+alph config check
+```
+
+Expected: `ok: all config files use recognized keys.`
+
+Now temporarily add a typo key to test detection:
+
+```bash
+# Add a bad key to config temporarily
+python3 -c "
+import yaml
+p = '$HOME/.config/alph/config.yaml'.replace('$HOME', __import__('os').path.expanduser('~'))
+d = yaml.safe_load(open(p))
+d['bogus_option'] = True
+open(p, 'w').write(yaml.dump(d, sort_keys=False))
+"
+```
+
+```bash
+alph config check
+```
+
+Expected: `warning: ... unknown root key: 'bogus_option'` followed by `1 issue found.`
+Exit code 1.
+
+```bash
+# Remove the bad key
+python3 -c "
+import yaml
+p = '$HOME/.config/alph/config.yaml'.replace('$HOME', __import__('os').path.expanduser('~'))
+d = yaml.safe_load(open(p))
+del d['bogus_option']
+open(p, 'w').write(yaml.dump(d, sort_keys=False))
+"
+```
+
+### 6b. Config show-all — merged config with defaults
+
+```bash
+alph config show-all
+```
+
+Expected: YAML output with syntax highlighting showing the fully merged config.
+All implicit defaults are filled in — `auto_commit: false`, `register_subdir_pools: false`,
+`mode: rw` (for local registries), `auto_push: false`, `auto_pull: false`, etc.
 
 ---
 
@@ -852,7 +948,9 @@ will automatically update the formula in homebrew-tap via the release workflow.
 - [ ] `brew install alph` works cleanly
 - [ ] Both `alph` and `alph-mcp` binaries in PATH
 - [ ] `alph --version` prints `alph 0.1.x`
-- [ ] `alph --help` shows: `add`, `list`, `show`, `validate`, `registry`, `pool`, `config`, `defaults`, global options `--registry` (`-r`/`--reg`), `--branch`, `--pool` (`-p`)
+- [ ] `man alph` displays comprehensive man page
+- [ ] `alph --help` shows: `add`, `list`, `show`, `validate`, `registry`, `pool`, `config`, `defaults`, global options `--registry` (`-r`/`--reg`), `--branch`, `--pool` (`-p`), and hint to run `alph examples`
+- [ ] `alph examples` prints structured usage walkthroughs (hidden from --help commands list)
 
 ### Registry and Pool Setup
 - [ ] `alph registry init` sets default when no default exists; reports full expanded pool home and config path
@@ -870,6 +968,9 @@ will automatically update the formula in homebrew-tap via the release workflow.
 - [ ] `alph pool list --registry <id>` lists pools in the specified registry
 - [ ] `alph pool list -v` shows `source` column (configured vs discovered) for pools found on disk but not in config
 - [ ] Reserved names: `alph registry init --id all` and `alph pool init --name all` both error
+- [ ] `alph pool init` writes `.alph.yaml` in pool dir with context, creator, created
+- [ ] `alph pool init` with `register_subdir_pools: false` (default) does NOT write pool entry to config
+- [ ] `alph pool init` with `register_subdir_pools: true` writes both dotfile and config entry
 - [ ] `alph pool init` on duplicate pool name errors: "already exists"
 - [ ] `alph pool init` on RO remote registry errors: "read-only"
 - [ ] `alph pool init` on RW remote without clone errors: "run registry clone first"
@@ -897,7 +998,16 @@ will automatically update the formula in homebrew-tap via the release workflow.
 - [ ] `alph config list` shows config discovery tree with exists/missing status
 - [ ] `alph config show <path>` displays YAML with syntax highlighting
 - [ ] `alph config show <missing-path>` shows "not found" + hints to `registry init` and `alph defaults` (no template dump)
-- [ ] `alph defaults` shows resolved creator, registry, pool, auto_commit, and resolved pool path; unset values show as `not set`
+- [ ] `alph defaults` shows resolved creator, registry, pool, auto_commit, register_subdir_pools, and resolved pool path; unset values show as `not set`
+- [ ] `alph config check` reports `ok` for valid config; flags unknown/legacy keys with exit code 1
+- [ ] `alph config show-all` displays fully merged config with all implicit defaults resolved
+
+### Registry Default Fallback
+- [ ] `alph registry check` (no argument) uses `default_registry`
+- [ ] `alph registry status` (no argument) uses `default_registry`
+- [ ] `alph registry clone` (no argument) uses `default_registry`
+- [ ] `alph registry pull` (no argument) uses `default_registry`
+- [ ] `alph registry check` with no argument and no `default_registry` set errors with hint
 
 ### Demo Registry
 - [ ] Demo registry seeds 28 nodes cleanly
