@@ -964,7 +964,84 @@ Remove the `remote-example` and `remote-rw` entries from `~/.config/alph/config.
 
 ---
 
-## 11. MCP Server — Smoke Test
+## 11. Tab Completion
+
+Install completion for your shell (run once):
+
+```bash
+alph --install-completion zsh   # or bash, fish
+```
+
+Then reload your shell (`exec zsh` or open a new terminal).
+
+### 11a. Registry ID completion
+
+```
+alph registry check <TAB>
+```
+
+Expected: shows all configured registry IDs plus `all`.
+
+```
+alph registry check ho<TAB>
+```
+
+Expected: filters to registry IDs starting with `ho`.
+
+### 11b. Pool completion — local registry
+
+```
+alph list --pool <TAB>
+```
+
+Expected: shows pool names discovered on disk under local registries (and under RW remote clone dirs if any are cloned).
+
+### 11c. Pool completion — RO remote registry (off by default)
+
+With a RO remote registry configured and **no** `completion_remote` flag set:
+
+```
+alph list --pool <TAB>
+```
+
+Expected: RO remote pool names do **not** appear (no network call made).
+
+To opt in, add to `~/.config/alph/config.yaml`:
+
+```yaml
+completion_remote: true          # global — all remote registries
+# OR per-registry:
+registries:
+  my-remote:
+    pool_home: git@github.com:org/repo.git:/registry
+    completion_remote: true      # only this registry fetches remotely
+```
+
+With `completion_remote: true` on a RO registry, tab-completing `--pool` calls the GitHub GraphQL API and caches results for 60 seconds (configurable via `completion_cache_ttl` in config). Subsequent tab presses within the TTL use the cached list.
+
+To adjust the TTL:
+
+```yaml
+completion_cache_ttl: 120        # seconds; default 60
+```
+
+Cache files live at `~/.cache/alph/completion/<hash>.json`.
+
+### Checklist
+
+- [ ] `alph --install-completion zsh` (or your shell) installs without error
+- [ ] Registry ID tab completion returns all configured IDs + `all`
+- [ ] Registry ID completion filters by prefix
+- [ ] Pool tab completion returns pool names from local registries
+- [ ] Pool completion returns pool names from RW remote clone dirs (no flag needed)
+- [ ] Pool completion skips RO remote registries by default (no network call)
+- [ ] Pool completion includes RO remote pools when `completion_remote: true` is set
+- [ ] Cache is written to `~/.cache/alph/completion/` on first remote fetch
+- [ ] Second tab-press within TTL uses cache (no additional API call)
+
+---
+
+## 12. MCP Server — Smoke Test
 
 ```bash
 alph-mcp &
