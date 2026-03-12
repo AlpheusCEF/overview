@@ -886,6 +886,7 @@ subpath:     registry
 branch:      seeded
 clone_path:  /tmp/alph-test-clone
 clone_state: cloned (clean)
+unpushed:    0
 auto_pull:   true
 auto_push:   true
 ```
@@ -916,7 +917,26 @@ Expected: `pulled: remote-rw (/tmp/alph-test-clone)`
 Note: pull uses `git pull --rebase` to handle diverged branches (e.g., multiple
 writers pushed independently). `--ff-only` would abort in that case.
 
-### 10d. List with --pull flag
+### 10d. Push local commits
+
+After adding a node (section 10e), if auto-push failed or is disabled:
+
+```bash
+alph registry push remote-rw
+```
+
+Expected: `pushed: remote-rw (/tmp/alph-test-clone)`
+
+To test the error path, temporarily set an invalid SSH key, run `alph add`, then observe:
+
+```
+error: auto-push failed: ... Run 'alph registry push remote-rw' to retry.
+```
+
+After fixing the SSH config, run `alph registry push remote-rw` to push the pending commit.
+The `unpushed:` count in `alph registry status remote-rw` shows how many commits are waiting.
+
+### 10f. List with --pull flag
 
 ```bash
 alph list --pool git@github.com:AlpheusCEF/multi-pool-repo-example.git:/registry/vehicles --pull
@@ -924,7 +944,7 @@ alph list --pool git@github.com:AlpheusCEF/multi-pool-repo-example.git:/registry
 
 Expected: pulls latest changes, then lists nodes from the local clone.
 
-### 10e. Write to RW remote pool
+### 10g. Write to RW remote pool
 
 ```bash
 alph add -c "Test node from RW clone." \
@@ -934,7 +954,7 @@ alph add -c "Test node from RW clone." \
 
 Expected: `node created: <id>`. Node file written to `/tmp/alph-test-clone/registry/vehicles/snapshots/`.
 
-### 10f. Clean up
+### 10h. Clean up
 
 ```bash
 rm -rf /tmp/alph-test-clone
@@ -1116,10 +1136,12 @@ will automatically update the formula in homebrew-tap via the release workflow.
 ### Remote Registry — RW Mode
 - [ ] `alph registry clone <id>` creates local clone and checks out configured branch
 - [ ] Second `alph registry clone <id>` prints "already cloned" (not "cloned")
-- [ ] `alph registry status <id>` shows mode, remote, clone state, auto_pull, auto_push for remote registries
+- [ ] `alph registry status <id>` shows mode, remote, clone state, unpushed count, auto_pull, auto_push for remote registries
 - [ ] `alph registry status <id>` shows path and exists for local registries
 - [ ] `auto_pull` and `auto_push` default to `true` for RW remote registries, `false` for local
 - [ ] `alph registry pull <id>` pulls latest changes in clone using `--rebase` (succeeds on diverged branches)
+- [ ] `alph registry push <id>` pushes local commits to remote (explicit push / recovery from failed auto-push)
+- [ ] Auto-push failure prints `error:` with `registry push <id>` recovery hint (not just a warning)
 - [ ] `alph list --pool <remote-url> --pull` pulls before listing (RW clones)
 - [ ] `alph add` against RW remote pool creates node in local clone
 - [ ] `alph validate` on local registries with auto_pull/auto_push checks git health (remote, clean tree)
