@@ -35,7 +35,7 @@ The user sees `fin`. The backend is `alph`.
 | `due_date` (`#due:2025-08-10`) | `meta.due` | Parsed from content at add time |
 | `depends:task_id` | `related_to` | Namespaced node reference |
 | `recur:daily\|weekly\|monthly` | `meta.recur` | Handled in fin display logic |
-| numeric task ID | alph node ID (12-char) | fin maps short IDs from list display; see ID bridging below |
+| numeric task ID | alph node ID (12-char) | fin displays first 6 chars; `fin close a1b2c3` does prefix match; no session state |
 | SQLite DB | git repo (Markdown + YAML) | Pool = `~/.fin/pools/<context>/` in a `tasks` registry |
 
 ### The Registry
@@ -54,7 +54,19 @@ registries:
 
 ### ID Bridging
 
-fin users reference tasks by short numeric IDs shown in `fin list` output (e.g., `fin close 3`). alph nodes use 12-char SHA hashes. The bridge: fin generates a **session-local ordered index** mapping display integers to node IDs. This index is written to `~/.fin/.fin-index.json` after every `fin list` call. Commands like `fin close 3` resolve `3` → node ID via this index. The index is ephemeral (session-scoped) — never relied on across reboots for correctness, only for convenience.
+fin users reference tasks by short IDs. alph nodes use 12-char SHA hashes. The bridge: **short-hash prefix matching**, the same model git uses.
+
+`fin list` displays the first 6 characters of each node ID in brackets:
+```
+[ ] Write the quarterly report       [a1b2c3] #work #important
+[ ] Fix the login bug                [b2c3d4] #work
+```
+
+`fin close a1b2c3` does a prefix match against the pool: find the node whose ID starts with `a1b2c3`. If the prefix is ambiguous (two nodes share the same 6-char prefix — vanishingly rare with SHA-derived IDs), fin reports the collision and asks the user to use more characters. The full 12-char ID always resolves unambiguously.
+
+This is strictly better than the original fin's numeric IDs: numeric IDs renumber when tasks are deleted and are meaningless across contexts. Short hashes are stable — the same task always has the same ID, in any context, forever.
+
+No session-index file. No `~/.fin/.fin-index.json`. No state between invocations. `index.py` is eliminated from the architecture.
 
 ---
 
@@ -67,14 +79,13 @@ fin-cli/
     core.py           # All fin logic. Calls alph_interface.py. Framework-agnostic. Permanent.
     alph_interface.py # Explicit surface fin uses from alph. Versioned contract. See below.
     display.py        # Rendering: priority buckets, date headers, status symbols
-    editor.py         # Intermediary edit format: serialize → editor → parse → actions
-    index.py          # Session-local int→node_id mapping (~/.fin/.fin-index.json)
+    editor.py         # Intermediary edit format: serialize → parse → actions (no editor launch)
     config.py         # fin config: default context, editor, date format, wrap width
   tests/
     test_core.py
     test_display.py
     test_editor.py
-    test_index.py
+    conftest.py       # Shared fixtures: isolated tmp pool dirs, synthetic alph configs
   fin               # CLI entry point (script)
   pyproject.toml
 ```
@@ -213,6 +224,34 @@ Agents active during development (via `.claude/agents/` symlinks from `agents` r
 - `tdd-guardian.md` — enforces RED-GREEN-REFACTOR discipline
 - `py-enforcer.md` — enforces mypy strict, ruff, type hint coverage
 
+### Testing Rules
+
+**Never launch an editor in tests.**
+
+The editor pipeline (`fine` / `fin e`) has two distinct halves: (1) the I/O boundary — serialize to a temp file, invoke `$EDITOR`, read it back; and (2) the logic — `parse_edit_doc()`, `diff_edit_actions()`, `apply_edit_actions()`. Only the second half is tested. The first half is a 3-line OS call in `cli.py` that doesn't need unit testing.
+
+Tests for `editor.py` work by:
+1. Serializing a known `FinEditDoc` to a string (as `render_edit_doc()` would write to the temp file)
+2. Applying a string transformation that mirrors what a user would do in the editor — delete a line, change a `status:` field, add a tag, add a `notes:` block
+3. Passing the transformed string to `parse_edit_doc()` → `diff_edit_actions()`
+4. Asserting the correct `EditAction` objects are produced
+
+This tests the full parse-and-diff logic without any process spawning, temp files, or blocking waits.
+
+**Tests never touch real user data.**
+
+No test ever reads from or writes to:
+- `~/.fin/` or any subdirectory
+- `~/.config/alph/config.yaml` or `~/.config/fin/config.yaml`
+- Any path under `~` that a real user installation would use
+
+All tests that need a pool directory use pytest's `tmp_path` fixture. All tests that need an alph config construct a synthetic `AlphConfig` object in memory or in `tmp_path`. The `conftest.py` provides:
+- `isolated_pool(tmp_path)` — creates a valid pool directory structure under `tmp_path`
+- `synthetic_alph_config(tmp_path)` — returns an `AlphConfig` pointing entirely at `tmp_path`
+- `mock_alph_interface` — patches `fin.alph_interface` for pure-logic tests that don't need the filesystem at all
+
+The `FIN_POOLS_DIR` environment variable (if set) overrides the default `~/.fin/pools/` path. Tests set this to `tmp_path` for any integration tests that exercise the full stack. CI always runs with `FIN_POOLS_DIR` pointed at a temp directory.
+
 ---
 
 ## Phases
@@ -232,6 +271,8 @@ Agents active during development (via `.claude/agents/` symlinks from `agents` r
 - [ ] Wire `.claude/CLAUDE.md` → agents repo CLAUDE.md (same 5-line block as other AlpheusCEF repos)
 - [ ] Symlink `tdd-guardian.md` and `py-enforcer.md` agents
 - [ ] Add `fin` entry point script
+- [ ] Add `tests/conftest.py` with `isolated_pool`, `synthetic_alph_config`, and `mock_alph_interface` fixtures
+- [ ] Confirm `FIN_POOLS_DIR` env var overrides pool home path (set in all CI runs)
 
 #### A.2 alph Interface Layer (`fin/alph_interface.py`)
 
@@ -264,27 +305,27 @@ TDD from here on.
 
 #### A.6 Add Task (`fin/core.py`)
 
-- [ ] `add_task(raw_content: str, context: str, alph_cfg) -> NodeResult` — parse content, ensure pool, call `alph.core.create_node()`
+- [ ] `add_task(raw_content: str, context: str, alph_cfg) -> NodeResult` — parse content, ensure pool, call `alph_interface.alph_create_node()`
 - [ ] Idempotency: alph's SHA ID deduplication is inherited automatically
 - [ ] Tests: add task, add duplicate (idempotent), add to named context, labels extracted, meta populated
 
 #### A.7 List Tasks (`fin/core.py`)
 
-- [ ] `list_tasks(context, days, statuses, alph_cfg) -> list[FinTask]` — call `alph.core.list_nodes()`, filter by date window, return typed list
+- [ ] `list_tasks(context, days, statuses, alph_cfg) -> list[FinTask]` — call `alph_interface.alph_list_nodes()`, filter by date window, return typed list
 - [ ] `FinTask` datatype — wraps NodeSummary with fin-specific computed fields (is_important, is_today, due_date, is_overdue)
 - [ ] Tests: empty pool, single task, filtering by status, filtering by days window
 
-#### A.8 Index Management (`fin/index.py`)
+#### A.8 ID Resolution (`fin/core.py`)
 
-- [ ] `build_index(tasks: list[FinTask]) -> Index` — map 1-based ints to node IDs, in display order
-- [ ] `save_index(index: Index) -> None` — write to `~/.fin/.fin-index.json`
-- [ ] `load_index() -> Index` — read back; return empty dict if missing
-- [ ] `resolve_id(user_input: str, index: Index) -> str` — int → node ID; pass-through if already looks like node ID
-- [ ] Tests: round-trip build/save/load, resolve int, resolve hash passthrough, missing index fallback
+Short-hash prefix matching. No session state, no index file.
+
+- [ ] `resolve_short_id(prefix: str, tasks: list[FinTask]) -> str` — find node ID starting with `prefix`; raise `AmbiguousIDError` if multiple match, `UnknownIDError` if none match
+- [ ] `format_short_id(node_id: str) -> str` — return first 6 chars for display
+- [ ] Tests: exact 6-char match, longer prefix match, ambiguous prefix raises error, no match raises error, full 12-char passthrough
 
 #### A.9 Display (`fin/display.py`)
 
-- [ ] `render_task_list(tasks: list[FinTask], index: Index) -> str` — priority buckets (important, today, regular), date headers, `[ ]` / `[x]` / `[d]` symbols, ID column
+- [ ] `render_task_list(tasks: list[FinTask]) -> str` — priority buckets (important, today, regular), date headers, `[ ]` / `[x]` / `[d]` symbols, 6-char short ID column
 - [ ] `render_task_detail(task: FinTask) -> str` — single task full view
 - [ ] All pure functions (str → str); no I/O
 - [ ] Tests: empty list, single task, priority ordering, completed task symbol, dismissed task symbol, overdue indicator
@@ -305,10 +346,11 @@ Thin Click wrapper calling core functions:
 
 - [ ] `fin "write the plan"` creates a valid alph snapshot node in `~/.fin/pools/default/`
 - [ ] `fin` lists it with display matching current fin output format
-- [ ] `fin close 1` marks it archived
+- [ ] `fin close a1b2c3` marks it archived via prefix resolution
 - [ ] `alph_interface.py` is the only point of contact with `alph.*`; core.py has no direct alph imports
-- [ ] All `alph_interface.py`, `core.py`, `display.py`, `index.py` functions have passing tests written test-first
+- [ ] All `alph_interface.py`, `core.py`, `display.py` functions have passing tests written test-first
 - [ ] `core.py` tests mock `alph_interface` — no filesystem or git required to run unit tests
+- [ ] No test writes to `~/.fin/` or `~/.config/`; all filesystem tests use `tmp_path`
 - [ ] mypy strict clean, ruff clean
 
 ---
@@ -327,9 +369,14 @@ The editor pipeline: `list_tasks()` → `serialize_to_edit_doc()` → temp file 
 - [ ] `parse_edit_doc(text: str, fmt: Literal['yaml', 'compact']) -> FinEditDoc` — parse temp file back to intermediary; compact format is read-only (no edit actions produced from compact diffs — users must use YAML mode to edit)
 - [ ] `diff_edit_actions(original: FinEditDoc, edited: FinEditDoc) -> list[EditAction]` — produce `CloseAction`, `DismissAction`, `AddTagAction`, `RemoveTagAction`, `UpdateContentAction`, `UpdateNotesAction`, `SetDueAction`, `AddTaskAction`
 - [ ] `apply_edit_actions(actions: list[EditAction], alph_cfg) -> EditResult` — execute via `alph_interface.py`; all-or-nothing (validate all before applying any)
-- [ ] `fin e` / `fine` — open editor (default YAML format), parse result, apply actions
+- [ ] `fin e` / `fine` — open editor (default YAML format), parse result, apply actions; the editor invocation itself is a single `subprocess.call([editor, tmpfile])` in `cli.py` — not tested
 - [ ] `fin e --compact` — open in compact (read-only) mode for quick review without editing
-- [ ] Tests: no changes, add task block, delete block → close, status change → close/dismiss, add tag, remove tag, edit summary, add notes, add due, round-trip serialize/parse, parse error surfaces cleanly before apply
+- [ ] Tests: **never launch an editor**. All `editor.py` tests operate on staged strings:
+  - Serialize a known `FinEditDoc` → string via `render_edit_doc()`
+  - Apply a string mutation mirroring a user action (delete block, change field, add block)
+  - Pass to `parse_edit_doc()` → `diff_edit_actions()` → assert correct `EditAction` list
+  - Cases: no changes, add task block, delete block → CloseAction, `status: archived` → CloseAction, `status: suppressed` → DismissAction, add tag, remove tag, edit summary, add notes, add due, new block (no id) → AddTaskAction
+  - Parse error cases: malformed YAML → error before any actions applied; missing required field → error with message identifying the block
 
 #### B.2 Completed Task View (`fin/cli.py`)
 
@@ -488,12 +535,126 @@ Same pattern as `alph` — same tap, same release workflow shape.
 4. **Bulk editor format**: Intermediary `FinEditDoc` YAML structure with two presentations (compact default, YAML opt-in). Editor priming for fold-to-summary-line UX. ✓
 5. **Distribution**: Same AlpheusCEF Homebrew tap pattern as `alph`. `brew install fin` via `AlpheusCEF/homebrew-tap`. `alph` declared as a formula dependency. ✓
 
-### Still Open
-
 6. ~~**fin package name (PyPI)**~~ — no PyPI release planned. Homebrew only. ✓
 7. **Compact editor parse tolerance**: Compact is display-only; YAML is the edit target. ✓
-8. **`notes:` field in alph node**: alph snapshot nodes use free-form Markdown below the `---` frontmatter separator. `notes:` content maps to node body. Confirmed as right mapping — `create_node(content=notes_text)` writes it below the separator. ✓
+8. **`notes:` field in alph node**: maps to node body (Markdown below `---` separator). `create_node(content=notes_text)`. ✓
+9. **ID model**: short-hash prefix matching (git model). Session-index eliminated. ✓
 
 ### Still Open
 
-9. **`update_node()` in alph core** — see feasibility assessment below. Must be resolved before Phase B work begins.
+10. **`update_node()` in alph core** — see Outstanding Items below. Must be resolved before Phase B work begins.
+
+---
+
+## Assessment: Semantic and Conceptual Matchup
+
+### Strong Fits
+
+**context → pool** is near-perfect. Each fin context becomes its own pool in the `tasks` registry. Cross-context queries (`fin list --all-contexts`) fall out from registry-level enumeration at no extra cost. The mental model is identical: a context is a scoped bucket of tasks.
+
+**label → tag** is clean. alph tags are already normalized lowercase strings. `#urgent` becomes `tags: [urgent]` at parse time. No semantic gap.
+
+**priority markers** (`#i`, `#t`) become tags `important` and `today` — fin's display logic reads them back for bucket rendering. No information loss.
+
+**meta fields** (`#due:`, `#recur:`) map to alph's `meta` dict which is an open key-value store by design. The mapping is mechanical.
+
+**open/completed/dismissed → active/archived/suppressed** is the closest behavioral match available. The semantics align well enough: active tasks surface by default, archived tasks are done, suppressed tasks are declined. The only nuance: alph describes `archived` as "no longer relevant — rarely surface." fin queries archived tasks frequently via `fins`. In practice this is fine — archived is still fully queryable; alph's language is descriptive guidance, not a hard filter.
+
+**Short hash IDs** are strictly better than fin's original numeric IDs. Numeric IDs in fin renumber as tasks are deleted and are meaningless across contexts. A short hash is stable — the same task has the same ID forever, survives context moves, and is the same prefix a user would use in `alph show`. This is a genuine UX improvement over the original, not a compromise.
+
+**Git history** as a first-class feature is a real improvement. `fin log a1b2c3` showing when a task was created, tagged, completed — this was impossible with SQLite.
+
+**MCP access** lands for free. Claude can see and manage fin tasks via the existing alph MCP tools the moment the `tasks` registry is declared. No new server code.
+
+### Real Tension: Task Mutability vs Node Immutability
+
+This is the most important thing to be clear-eyed about. alph's design language describes snapshot nodes as frozen moments — "content is immutable at creation time." fin tasks are inherently mutable: you complete them, tag them, add notes, reopen them, change their due dates. The plan's `UpdateContentAction`, `UpdateNotesAction`, `SetDueAction`, and `CloseAction` all require in-place frontmatter or body edits on existing node files.
+
+alph's current `core.py` does not have an `update_node()` function. See Outstanding Items for the full specification.
+
+This is a real gap but not a fatal one. The `alph_interface.py` boundary contains it: the interface declares stable update signatures regardless of the underlying implementation. The gap is a prerequisite for Phase B, not Phase A.
+
+### The Philosophical Gap
+
+alph nodes are designed for *context capture* — decisions, observations, references that increase in value over time. fin tasks are operational — they exist to be completed and discarded. These are genuinely different:
+
+- An alph node ("we chose Postgres because...") is indefinitely relevant and gets richer as more context references it.
+- A fin task ("renew registration") has zero long-term value once done.
+
+This matters less than it sounds. The alph schema is flexible enough to hold tasks — nothing in the schema prevents it. The `tasks` registry will simply have a different character than other registries when queried by Claude: mostly short-lived operational items rather than durable decisions. That's fine and expected. Claude reading the `tasks` registry context field ("Personal task lists managed by fin") will understand what it's looking at.
+
+The philosophical difference becomes interesting in Phase C: once fin tasks live in the same system as alph context nodes, a task like "write security design review" can carry a `related_to` reference to the alph pool for that project. That cross-linking was the whole point.
+
+### Feasibility Summary
+
+**Phase A — High confidence.** All operations are creation-time writes and reads. alph's `create_node` and `list_nodes` are the only alph functions needed, both well-tested. The `alph_interface.py` boundary makes this solid.
+
+**Phase B — Conditional on one prerequisite.** `update_node()` in alph must exist before Phase B begins. Everything else (recurrence, dependencies, label filtering, context commands) is pure fin logic with no alph changes needed.
+
+**Phase C — Straightforward.** `fin list --all-contexts` is a loop over pools. MCP access is already working. `fin link` requires `update_node()` (same prerequisite as Phase B). Git history commands are thin shell calls.
+
+**Phase D — Standard.** Migration from SQLite is mechanical. Homebrew formula follows the established pattern.
+
+---
+
+## Outstanding Items
+
+### `update_node()` in alph core — Required Before Phase B
+
+**The gap**: alph has `create_node()` but no function to update an existing node's frontmatter or body. fin needs this for every mutation operation: completing a task, adding tags via the editor, changing a due date, adding notes.
+
+**What's needed** in `alph.core`:
+
+```python
+def update_node(
+    pool_path: Path,
+    node_id: str,
+    *,
+    status: str | None = None,          # active | archived | suppressed
+    tags: list[str] | None = None,       # replaces existing tags if provided
+    tags_add: list[str] | None = None,   # merge into existing tags
+    tags_remove: list[str] | None = None,# remove from existing tags
+    meta: dict[str, str] | None = None,  # merge into existing meta
+    content: str | None = None,          # replaces node body if provided
+    summary: str | None = None,          # replaces the `context` frontmatter field
+    related_to: list[str] | None = None, # replaces related_to list if provided
+    related_add: list[str] | None = None,# append to related_to
+) -> NodeResult:
+    ...
+```
+
+**Behavior**:
+- Reads the existing node file
+- Parses frontmatter
+- Applies only the fields passed (None = leave untouched)
+- Re-validates the modified frontmatter against the node schema before writing
+- Writes the file back in-place (ruamel.yaml to preserve comment formatting)
+- If `auto_commit` is configured, commits with message `alph: update node <id>`
+- Returns `NodeResult` with the updated node ID and path
+
+**Tags semantics**: `tags=` is a full replacement (sets the list to exactly this). `tags_add=` merges without duplicates. `tags_remove=` removes named tags. Only one of `tags` or `tags_add`/`tags_remove` should be passed in a single call; passing `tags=` together with `tags_add=` is an error.
+
+**Idempotency**: calling `update_node()` with the same values as the current state is a no-op (no file write, no commit). Detect by comparing computed values before writing.
+
+**What fin's `alph_interface.py` exposes**:
+
+```python
+def alph_update_node(
+    pool_path: Path,
+    node_id: str,
+    *,
+    status: str | None = None,
+    tags_add: list[str] | None = None,
+    tags_remove: list[str] | None = None,
+    meta: dict[str, str] | None = None,
+    content: str | None = None,
+    summary: str | None = None,
+    related_add: list[str] | None = None,
+) -> NodeResult: ...
+```
+
+fin does not use `tags=` (full replacement) — always uses `tags_add`/`tags_remove` to avoid clobbering tags set by other tools (e.g. alph CLI or MCP).
+
+**Where this needs to be implemented**: `alph.core` in the `alph-cli` repo. This should be raised as a GitHub issue on `AlpheusCEF/alph-cli` before Phase B begins, implemented TDD-first in that repo, released in a patch version, and referenced in `alph_interface.py`'s version compatibility note.
+
+**Interim option if alph update lands late**: `alph_interface.py` can implement a temporary in-process version that directly edits the YAML file using ruamel.yaml, bypassing `alph.core`. This keeps fin unblocked and gets replaced once the real alph function ships. The fin interface signature stays identical — the implementation swaps under it.
