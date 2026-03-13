@@ -1,7 +1,7 @@
 # AlpheusCEF: State of the Project
 
-**Date**: 2026-03-12
-**Status**: Phase 1, Phase 2 (distribution + MCP), and remote registry support complete and shipping
+**Date**: 2026-03-13
+**Status**: Phase 1, Phase 2 (distribution + MCP), remote registry support, content_type system, and update_node complete and shipping
 
 ---
 
@@ -88,9 +88,10 @@ Optional fields provide graph edges and extensibility:
 | Field | Description |
 |-------|-------------|
 | `status` | Query visibility: `active` (default), `archived`, or `suppressed` (see below) |
+| `content_type` | Content format/kind: `text` (default), `gdoc`, `slack`, `jira`, `confluence`, `email`, `image`, `figma`, `task`. Determines expected `meta` fields (see planned.md) |
 | `related_to` | List of node/pool references (see cross-referencing below) |
 | `tags` | Semantic labels (decision, concern, requirement, open, closed, in-progress) |
-| `meta` | Source-specific key-value pairs (url, doc_id, provider, cost, mileage, resolves_to) |
+| `meta` | Source-specific key-value pairs (url, doc_id, provider, cost, mileage, resolves_to, priority, due, recur) |
 
 ### Node Status
 
@@ -201,7 +202,8 @@ Registries are declared in the alph config file alongside other settings. All re
 | `alph registry status <id>` | | Show registry mode, clone state, branch, auto_pull, auto_push, and path details |
 | `alph pool init --name <name>` | | Create a pool, register it, validate, show defaults |
 | `alph pool list` | | List pools in a registry with name, type, context, and path; discovers unconfigured pools on disk |
-| `alph add -c "context text"` | `alph a -c "text"` | Create a node (auto-commits if configured; auto-pushes if `auto_push: true`) |
+| `alph add -c "context text"` | `alph a -c "text"` | Create a node (auto-commits if configured; auto-pushes if `auto_push: true`). Supports `--tags`, `--meta key=value`, `--related-to`, `--content-type`/`--ct` |
+| `alph update <id> [flags]` | | Update an existing node's frontmatter or body. Flags: `--status`, `--tags-add`, `--tags-remove`, `--meta key=value`, `--content`, `-c`/`--context`, `--content-type`/`--ct`, `--related-add` |
 | `alph list [-s ...] [-o ...] [--pull]` | `alph l` | List nodes; default active only; `-s` for status filter; `-o` for output format; `--pull` for fresh data |
 | `alph show <id> [--pull]` | `alph s <id>` | Display full node; `--pull` for fresh data from RW clones |
 | `alph validate [--pull]` | `alph v` | Check nodes against schema; `--pull` for fresh data |
@@ -261,6 +263,8 @@ Python 3.12+, Poetry for dependency management, FastMCP 3.x for the MCP server l
 - Remote registries: two-mode architecture (RO via GitHub GraphQL API, RW via local clone); `mode: ro | rw` config per registry; `auto_push` for RW remotes; SSH host aliases resolved via `~/.ssh/config` for forge detection; `ssh_command` registry key sets `GIT_SSH_COMMAND` for all git ops on that registry
 - `defaults_reminder: false` top-level config key suppresses the "not set as default" hint printed by `alph registry init`
 - Reserved names: `all` is reserved and cannot be used as a registry ID or pool name
+- `content_type` field: closed enum (`text`, `gdoc`, `slack`, `jira`, `confluence`, `email`, `image`, `figma`, `task`) with type-specific meta validation; `task` type has no required meta (flexible by design)
+- `update_node()` for in-place frontmatter/body modification with validation, no-op detection, and auto-commit
 - Validator checks both nodes and registry
 - `alph list` and `alph show` for human inspection
 - `status` field (`active`/`archived`/`suppressed`) as first-class for query behavior; tags for categorization only; `-s`/`--status` flag to expand beyond active
@@ -299,19 +303,19 @@ Python 3.12+, Poetry for dependency management, FastMCP 3.x for the MCP server l
 
 ## What Has Been Built
 
-Phase 1, Phase 2, and remote registry support are complete. The project is at v0.1.34 (Homebrew).
+Phase 1, Phase 2, remote registry support, content_type system, and update_node are complete. Released version is v0.1.34 (Homebrew). Content_type, update_node, --tags/--meta/--related-to flags, and meta display in `alph show` are implemented and tested but pending the next release tag.
 
 ### Core Engine (`alph-cli` repo, `src/alph/`)
 
-- **`core.py`**: All production logic. Framework-agnostic. Fully type-annotated (mypy strict). Functions: `load_config`, `init_registry`, `init_pool`, `create_node`, `generate_id`, `check_idempotency`, `validate_node`, `validate_pool`, `validate_config_keys`, `validate_config_integrity`, `check_git_state`, `list_nodes`, `list_pools`, `show_node`, `resolve_pool_name`, `collect_registries`, `find_registry_config`, `is_remote_registry`, `parse_remote_registry`, `effective_mode`. Pool dotfiles (`.alph.yaml`) for pool-local metadata; `register_subdir_pools` config key controls whether subdir pools also get config entries (default: false). Config write operations use ruamel.yaml to preserve YAML comments. Reserved names: `all`, `alph`. `resolve_pool_name` falls back to directory existence for bare pool names not explicitly declared in the pools dict. `validate_config_integrity` checks that `default_registry` references a declared registry.
+- **`core.py`**: All production logic. Framework-agnostic. Fully type-annotated (mypy strict). Functions: `load_config`, `init_registry`, `init_pool`, `create_node`, `update_node`, `generate_id`, `check_idempotency`, `validate_node`, `validate_pool`, `validate_config_keys`, `validate_config_integrity`, `check_git_state`, `list_nodes`, `list_pools`, `show_node`, `resolve_pool_name`, `collect_registries`, `find_registry_config`, `is_remote_registry`, `parse_remote_registry`, `effective_mode`. `update_node()` modifies existing node frontmatter and/or body with full validation, no-op detection, tags add/remove/replace, meta merge, content/context replacement, content_type change, and related_to add/replace. `_find_node_file()` helper shared by `check_idempotency`, `show_node`, and `update_node`. `content_type` field supports: `text`, `gdoc`, `slack`, `jira`, `confluence`, `email`, `image`, `figma`, `task`. Pool dotfiles (`.alph.yaml`) for pool-local metadata; `register_subdir_pools` config key controls whether subdir pools also get config entries (default: false). Config write operations use ruamel.yaml to preserve YAML comments. Reserved names: `all`, `alph`. `resolve_pool_name` falls back to directory existence for bare pool names not explicitly declared in the pools dict. `validate_config_integrity` checks that `default_registry` references a declared registry.
 - **`remote.py`**: Remote registry access. `GitHubProvider` (GraphQL batch reads), `RemoteProvider` protocol, `resolve_pool_readonly` (ephemeral tmpdir), clone management (`clone_remote_registry`, `pull_remote_registry`, `push_remote_registry`, `default_clone_dir`). SSH host alias resolution via `~/.ssh/config` — URLs like `git@github-personal:org/repo.git` are correctly identified when the alias maps to `github.com`. All three git ops accept `ssh_command=` to inject `GIT_SSH_COMMAND` into the subprocess env. Pull uses `--rebase` (replaced `--ff-only`) to handle diverged branches from multiple writers. `list_remote_pools` lists pool directories from the remote via the GraphQL API. `fetch_remote_pools_cached` wraps it with a disk cache (`~/.cache/alph/completion/<hash>.json`) using a configurable TTL (default 60 s).
 - **`cli.py`**: Typer wrapper. Commands: `registry init`, `registry list`, `registry check` (including `check all`), `registry clone`, `registry pull`, `registry push`, `registry status` (including `status all`), `pool init`, `pool list`, `add` (`a`), `list` (`l`), `show` (`s`), `validate` (`v`), `config list`, `config show`, `config check`, `config show-all`, `defaults`, `examples` (hidden). `reg` is a shorthand for `registry`; `registry`, `pool`, and `config` with no subcommand default to `list`. Registry commands (`check`, `clone`, `pull`, `push`, `status`) default to `default_registry` when no argument given. Global `--registry` (`-r`/`--reg`) and `--branch` options; `--pool` accepts `-p`. Per-command `-v`/`--verbose` flag and `--pull` flag on read commands. Default registry/pool resolution from config with remote URL support. Reserved names (`all`, `alph`) rejected by `registry init` and `pool init`. `config check` validates referential integrity — warns when `default_registry` names a registry not declared in config. Auto-push failures are elevated to errors with a `registry push <id>` recovery hint. `registry status` shows unpushed commit count for cloned RW registries. **Tab completion**: `autocompletion=` wired to registry ID arguments (`_complete_registry_id`) and `--pool/-p` options (`_complete_pool`). Local registries and RW remote clones are scanned from disk; RO remote registries are queried via the forge API only when `completion_remote: true` is set (global or per-registry), with results cached for `completion_cache_ttl` seconds (default 60). `completion_remote` defaults to `false` — no network calls during tab completion unless opted in. `completions show [shell]` prints the completion script to stdout; `completions install [shell]` writes it to the standard location and prints activation instructions. Typer's built-in `--install-completion` is left enabled (`add_completion=True` — disabling it breaks runtime completion) but superseded by these commands. The generated completion script is stripped of Typer's leading newline so zsh `compinit` recognises the `#compdef` directive at byte 0.
-- **`mcp_server.py`**: FastMCP 3.x wrapper. One tool per core function. Detailed docstrings, MCP annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`), dual output (`text` + `json`). Transparent remote pool support via `_resolve_pool` context manager.
+- **`mcp_server.py`**: FastMCP 3.x wrapper. One tool per core function. Tools: `add_node` (with `meta`, `related_to`, `content_type` params), `list_pool_nodes`, `show_pool_node`, `validate_pool`, `update_pool_node`. Detailed docstrings, MCP annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`), dual output (`text` + `json`). Transparent remote pool support via `_resolve_pool` context manager.
 - **`man/alph.1`**: Comprehensive man page covering all commands, config keys, node schema, environment variables, and examples. Installed by Homebrew formula.
 
 ### Test Suite
 
-350 tests passing. Full TDD — every production function written test-first. mypy strict clean, ruff clean.
+411 tests passing (32 new for content_type, update_node, CLI flags, MCP tools; 4 for meta display in show). Full TDD — every production function written test-first. mypy strict clean, ruff clean.
 
 ### Distribution
 

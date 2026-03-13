@@ -5,8 +5,9 @@ Design documentation for the Alpheus Context Engine Framework.
 ## Docs
 
 - [STATE.md](STATE.md) — full design and current status
-- [PLAN.md](PLAN.md) — phased implementation plan
-- [FUTURE.md](FUTURE.md) — future horizons and open questions
+- [planned.md](planned.md) — completed work with details
+- [plans.md](plans.md) — future alph plans and open questions
+- [fin_plan.md](fin_plan.md) — fin-cli rewrite plan (separate track)
 
 ## Repos
 
