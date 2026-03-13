@@ -2,7 +2,7 @@
 
 **Date**: 2026-03-13
 **Branch**: `claude/fin-cli-alpheus-rewrite-kk3ef`
-**Repo**: `fin-cli` (new) — alph as imported library, fin UX preserved
+**Repo**: `AlpheusCEF/fin-cli` — alph as imported library, fin UX preserved
 
 ---
 
@@ -50,6 +50,8 @@ registries:
     context: "Personal task lists managed by fin"
 ```
 
+`~/.fin/pools/` is the canonical location. XDG-compliance is a Phase D consideration, not a blocker.
+
 ### ID Bridging
 
 fin users reference tasks by short numeric IDs shown in `fin list` output (e.g., `fin close 3`). alph nodes use 12-char SHA hashes. The bridge: fin generates a **session-local ordered index** mapping display integers to node IDs. This index is written to `~/.fin/.fin-index.json` after every `fin list` call. Commands like `fin close 3` resolve `3` → node ID via this index. The index is ephemeral (session-scoped) — never relied on across reboots for correctness, only for convenience.
@@ -61,32 +63,138 @@ fin users reference tasks by short numeric IDs shown in `fin list` output (e.g.,
 ```
 fin-cli/
   fin/
-    cli.py          # Thin Click wrapper. No logic — all calls go to core.py
-    core.py         # All fin logic. Imports alph.core. Framework-agnostic. Permanent.
-    display.py      # Rendering: priority buckets, date headers, status symbols
-    index.py        # Session-local int→node_id mapping (~/.fin/.fin-index.json)
-    config.py       # fin config: default context, editor, date format, wrap width
+    cli.py            # Thin Click wrapper. No logic — all calls go to core.py
+    core.py           # All fin logic. Calls alph_interface.py. Framework-agnostic. Permanent.
+    alph_interface.py # Explicit surface fin uses from alph. Versioned contract. See below.
+    display.py        # Rendering: priority buckets, date headers, status symbols
+    editor.py         # Intermediary edit format: serialize → editor → parse → actions
+    index.py          # Session-local int→node_id mapping (~/.fin/.fin-index.json)
+    config.py         # fin config: default context, editor, date format, wrap width
   tests/
     test_core.py
     test_display.py
+    test_editor.py
     test_index.py
-  fin             # CLI entry point (script)
+  fin               # CLI entry point (script)
   pyproject.toml
 ```
 
-`alph` is declared as a library dependency in `pyproject.toml`. `fin/core.py` imports `alph.core` directly. The alph CLI is not invoked — only its Python API is used.
+`alph` is declared as a library dependency in `pyproject.toml`. **fin never imports `alph.core` directly** — all alph calls go through `fin/alph_interface.py`.
+
+### alph_interface.py — The Compatibility Contract
+
+This is the answer to "how do we handle alph version changes without fin breaking?"
+
+`alph_interface.py` is a thin, fully type-annotated module that declares the exact surface fin uses from alph. It re-exports only the types and calls fin needs, behind stable fin-defined signatures:
+
+```python
+# fin/alph_interface.py
+from alph.core import load_config, create_node, list_nodes, show_node, validate_node
+from alph.core import AlphConfig, NodeResult, NodeSummary  # re-export stable types
+
+def alph_load_config() -> AlphConfig: ...
+def alph_create_node(pool_path, source, context, tags, meta, ...) -> NodeResult: ...
+def alph_list_nodes(pool_path, statuses) -> list[NodeSummary]: ...
+def alph_set_node_status(pool_path, node_id, status) -> NodeResult: ...
+```
+
+**Why this approach:**
+- `fin/core.py` is insulated from alph API changes — only `alph_interface.py` needs to change when alph upgrades
+- `alph_interface.py` is the pinning contract. If alph releases a breaking change, the interface module absorbs it in one place
+- Tests can mock `alph_interface` entirely, making `core.py` tests fast and hermetic (no filesystem, no git)
+- Version pin in `pyproject.toml`: `alph = ">=0.1.34,<0.2.0"` — allows patch/minor, blocks major breaks
 
 **What fin/core.py does:**
-- Calls `alph.core.load_config()` to get registry/pool config
-- Calls `alph.core.create_node()` to add tasks
-- Calls `alph.core.list_nodes()` to list tasks, then passes results to `display.py`
-- Calls `alph.core.validate_node()` for integrity checks
+- Calls `alph_interface.py` for all alph operations
 - Manages the `tasks` registry and context-as-pool mapping
 - Parses fin-specific metadata (`#due:`, `#recur:`, `#depends:`, `#i`, `#t`) from content strings into alph `meta` and `tags` fields
 
 **What fin/core.py does NOT do:**
+- Import `alph.*` directly
 - Duplicate alph's ID generation, node schema, git operations, config loading, or validation logic
 - Maintain its own database
+
+---
+
+## The Editor Format
+
+The bulk editor (`fine` / `fin e`) opens tasks as if they were a text file. The goal: **quick review and editing**, with outcomes including closing tasks, adding tags, modifying content, and adding notes.
+
+### Intermediary Format (`FinEditDoc`)
+
+The editor serializes tasks to an **intermediary YAML structure** — not alph's node format, not the old one-line format. This is the canonical representation for editing. Presentation (how it looks in the editor) is separate from the structure.
+
+Each task block:
+
+```yaml
+- summary: Write the quarterly report
+  id: a1b2c3d4e5f6
+  status: active
+  tags: [work, important]
+  due: 2026-03-20
+  notes: |
+    Include Q1 metrics and projections.
+    Check with finance on headcount numbers.
+```
+
+Tasks without notes are still valid and minimal:
+
+```yaml
+- summary: Fix the login bug
+  id: b2c3d4e5f6a1
+  status: active
+  tags: [work]
+```
+
+### Editor Presentations
+
+The intermediary format is the parse target. Presentation is what actually gets written to the temp file and shown to the user. Two initial presentations:
+
+**Compact** (default — muscle memory friendly, code-folding-ready):
+```
+[ ] Write the quarterly report                [a1b2c3] #work #important  due:2026-03-20
+[ ] Fix the login bug                         [b2c3d4] #work
+```
+One line per task. ID shown in brackets. Tags as hashtags. Details hidden. When the editor supports code folding and the file is YAML, each block folds to its summary line — same visual, richer editing.
+
+**YAML** (opt-in via `fin e --format yaml`, or set in fin config):
+```yaml
+- summary: Write the quarterly report
+  id: a1b2c3d4e5f6
+  status: active
+  tags: [work, important]
+  due: 2026-03-20
+  notes: |
+    Include Q1 metrics and projections.
+```
+Full detail visible. Add notes inline. Fold blocks in a YAML-aware editor (VSCode, Neovim + treesitter) to get the compact view back.
+
+### Outcomes from the Editor
+
+When the user saves and exits, `editor.py` diffs the original `FinEditDoc` against the parsed result and produces `EditAction` objects:
+
+| Change made in editor | Action |
+|---|---|
+| Delete a task line / block | `CloseAction` (mark archived) |
+| Change `status: active` → `status: archived` | `CloseAction` |
+| Add `[d]` / `status: suppressed` | `DismissAction` |
+| Add a tag | `AddTagAction` |
+| Remove a tag | `RemoveTagAction` |
+| Edit summary text | `UpdateContentAction` |
+| Add/edit `notes:` | `UpdateNotesAction` |
+| Add `due:` | `SetDueAction` |
+| Add new line / block (no `id:`) | `AddTaskAction` |
+
+**Key design principle**: the edit format is an **input format**, not a storage format. It is never persisted. Parse errors are surfaced to the user before any actions are applied (all-or-nothing per save).
+
+### Editor Priming
+
+The `notes:` field is the hook for editor-side UX. A well-configured editor (VSCode with YAML extension, Neovim with treesitter folding) will:
+- Fold each task block to its `summary:` line by default
+- Expand on cursor entry to show tags, due, notes
+- Validate YAML structure as you type
+
+`fin` can emit a `.editorconfig` or workspace hint into the temp file header (as a YAML comment) that primes supported editors to fold on open. This is best-effort — compact presentation remains the default for editors that don't support it.
 
 ---
 
@@ -125,7 +233,21 @@ Agents active during development (via `.claude/agents/` symlinks from `agents` r
 - [ ] Symlink `tdd-guardian.md` and `py-enforcer.md` agents
 - [ ] Add `fin` entry point script
 
-#### A.2 Config Layer (`fin/config.py`)
+#### A.2 alph Interface Layer (`fin/alph_interface.py`)
+
+Written before `core.py` — this is the dependency boundary. All tests for `core.py` mock this module.
+
+- [ ] `alph_load_config() -> AlphConfig`
+- [ ] `alph_ensure_registry(cfg, registry_id, pool_home, context) -> None`
+- [ ] `alph_ensure_pool(cfg, registry_id, pool_name, context) -> Path`
+- [ ] `alph_create_node(pool_path, source, node_context, tags, meta, content) -> NodeResult`
+- [ ] `alph_list_nodes(pool_path, statuses) -> list[NodeSummary]`
+- [ ] `alph_set_node_status(pool_path, node_id, status) -> NodeResult`
+- [ ] `alph_show_node(pool_path, node_id) -> NodeDetail`
+- [ ] Version compatibility note in module docstring: which alph version range this interface was written against
+- [ ] Tests: each wrapper calls the correct alph function with correct args (mock `alph.core.*`)
+
+#### A.4 Config Layer (`fin/config.py`)
 
 TDD from here on.
 
@@ -134,25 +256,25 @@ TDD from here on.
 - [ ] `ensure_context_pool(context, alph_cfg) -> Path` — idempotently create pool for a context if absent
 - [ ] Tests for all three; config is created on first `fin add` call
 
-#### A.3 Content Parser (`fin/core.py`)
+#### A.5 Content Parser (`fin/core.py`)
 
 - [ ] `parse_fin_content(raw: str) -> ParsedTask` — extract tags (`#label`), meta (`#due:`, `#recur:`, `#depends:`), priority markers (`#i`, `#t`), remaining clean content
 - [ ] `build_node_kwargs(parsed: ParsedTask) -> dict` — map ParsedTask fields to alph `create_node()` kwargs (tags, meta, context field)
 - [ ] Tests covering: bare text, single label, multiple labels, due date, recur, depends, combined, edge cases (no content, only labels)
 
-#### A.4 Add Task (`fin/core.py`)
+#### A.6 Add Task (`fin/core.py`)
 
 - [ ] `add_task(raw_content: str, context: str, alph_cfg) -> NodeResult` — parse content, ensure pool, call `alph.core.create_node()`
 - [ ] Idempotency: alph's SHA ID deduplication is inherited automatically
 - [ ] Tests: add task, add duplicate (idempotent), add to named context, labels extracted, meta populated
 
-#### A.5 List Tasks (`fin/core.py`)
+#### A.7 List Tasks (`fin/core.py`)
 
 - [ ] `list_tasks(context, days, statuses, alph_cfg) -> list[FinTask]` — call `alph.core.list_nodes()`, filter by date window, return typed list
 - [ ] `FinTask` datatype — wraps NodeSummary with fin-specific computed fields (is_important, is_today, due_date, is_overdue)
 - [ ] Tests: empty pool, single task, filtering by status, filtering by days window
 
-#### A.6 Index Management (`fin/index.py`)
+#### A.8 Index Management (`fin/index.py`)
 
 - [ ] `build_index(tasks: list[FinTask]) -> Index` — map 1-based ints to node IDs, in display order
 - [ ] `save_index(index: Index) -> None` — write to `~/.fin/.fin-index.json`
@@ -160,14 +282,14 @@ TDD from here on.
 - [ ] `resolve_id(user_input: str, index: Index) -> str` — int → node ID; pass-through if already looks like node ID
 - [ ] Tests: round-trip build/save/load, resolve int, resolve hash passthrough, missing index fallback
 
-#### A.7 Display (`fin/display.py`)
+#### A.9 Display (`fin/display.py`)
 
 - [ ] `render_task_list(tasks: list[FinTask], index: Index) -> str` — priority buckets (important, today, regular), date headers, `[ ]` / `[x]` / `[d]` symbols, ID column
 - [ ] `render_task_detail(task: FinTask) -> str` — single task full view
 - [ ] All pure functions (str → str); no I/O
 - [ ] Tests: empty list, single task, priority ordering, completed task symbol, dismissed task symbol, overdue indicator
 
-#### A.8 CLI (`fin/cli.py`)
+#### A.10 CLI (`fin/cli.py`)
 
 Thin Click wrapper calling core functions:
 
@@ -184,7 +306,9 @@ Thin Click wrapper calling core functions:
 - [ ] `fin "write the plan"` creates a valid alph snapshot node in `~/.fin/pools/default/`
 - [ ] `fin` lists it with display matching current fin output format
 - [ ] `fin close 1` marks it archived
-- [ ] All core.py and display.py functions have passing tests written test-first
+- [ ] `alph_interface.py` is the only point of contact with `alph.*`; core.py has no direct alph imports
+- [ ] All `alph_interface.py`, `core.py`, `display.py`, `index.py` functions have passing tests written test-first
+- [ ] `core.py` tests mock `alph_interface` — no filesystem or git required to run unit tests
 - [ ] mypy strict clean, ruff clean
 
 ---
@@ -193,13 +317,19 @@ Thin Click wrapper calling core functions:
 
 **Milestone**: Every `fin` command from the original CLI works identically from the user's perspective. Data lives in alph pools.
 
-#### B.1 Bulk Editor (`fin/core.py` + `fin/cli.py`)
+#### B.1 Bulk Editor (`fin/editor.py` + `fin/cli.py`)
 
-- [ ] `get_editable_text(tasks: list[FinTask], index: Index) -> str` — serialize tasks to editor format
-- [ ] `parse_edited_text(text: str, original: list[FinTask]) -> list[EditAction]` — diff original vs edited, produce add/update/close/delete actions
-- [ ] `apply_edit_actions(actions: list[EditAction], alph_cfg) -> EditResult` — execute actions via alph core
-- [ ] `fin e` / `fine` — open editor, parse result, apply actions
-- [ ] Tests: no changes, add line, delete line, modify content, close (remove checkbox), round-trip
+The editor pipeline: `list_tasks()` → `serialize_to_edit_doc()` → temp file → user's `$EDITOR` → `parse_edit_doc()` → `diff_edit_actions()` → `apply_edit_actions()`.
+
+- [ ] `FinEditDoc` — typed intermediary dataclass; list of `FinEditTask` entries (summary, id, status, tags, due, notes)
+- [ ] `serialize_to_edit_doc(tasks: list[FinTask]) -> FinEditDoc` — convert FinTask list to intermediary structure
+- [ ] `render_edit_doc(doc: FinEditDoc, fmt: Literal['yaml', 'compact']) -> str` — produce the string written to temp file; compact is display-only, yaml is the editable target
+- [ ] `parse_edit_doc(text: str, fmt: Literal['yaml', 'compact']) -> FinEditDoc` — parse temp file back to intermediary; compact format is read-only (no edit actions produced from compact diffs — users must use YAML mode to edit)
+- [ ] `diff_edit_actions(original: FinEditDoc, edited: FinEditDoc) -> list[EditAction]` — produce `CloseAction`, `DismissAction`, `AddTagAction`, `RemoveTagAction`, `UpdateContentAction`, `UpdateNotesAction`, `SetDueAction`, `AddTaskAction`
+- [ ] `apply_edit_actions(actions: list[EditAction], alph_cfg) -> EditResult` — execute via `alph_interface.py`; all-or-nothing (validate all before applying any)
+- [ ] `fin e` / `fine` — open editor (default YAML format), parse result, apply actions
+- [ ] `fin e --compact` — open in compact (read-only) mode for quick review without editing
+- [ ] Tests: no changes, add task block, delete block → close, status change → close/dismiss, add tag, remove tag, edit summary, add notes, add due, round-trip serialize/parse, parse error surfaces cleanly before apply
 
 #### B.2 Completed Task View (`fin/cli.py`)
 
@@ -314,10 +444,13 @@ Thin Click wrapper calling core functions:
 
 #### D.2 Homebrew Formula
 
-- [ ] Add `fin` formula to `AlpheusCEF/homebrew-tap`
-- [ ] `brew install fin` installs `fin` and `fine` and `fins` binaries
-- [ ] `alph` is a dependency in the formula (pulls in the tap's existing alph formula)
-- [ ] Release workflow updates formula SHA on tag
+Same pattern as `alph` — same tap, same release workflow shape.
+
+- [ ] Add `fin` formula to `AlpheusCEF/homebrew-tap` alongside the existing `alph` formula
+- [ ] `brew tap AlpheusCEF/tap && brew install fin` installs `fin`, `fine`, and `fins` binaries
+- [ ] `alph` declared as a Homebrew dependency in the `fin` formula — installs both tools together
+- [ ] Release workflow (GitHub Actions on tag): build sdist, update formula SHA in homebrew-tap automatically
+- [ ] `brew install alph` and `brew install fin` remain independent — users who want only alph still can
 
 #### D.3 CI/CD
 
@@ -345,10 +478,18 @@ Thin Click wrapper calling core functions:
 
 ---
 
-## Open Questions (to resolve before or during Phase A)
+## Open Questions
 
-1. **New repo vs. fork**: Create a fresh `AlpheusCEF/fin-cli` repo, or fork `chasemp/fin-cli` into the org? Fresh repo preferred to avoid carrying SQLite history and `requirements.txt` patterns.
-2. **alph version pinning**: Pin to a specific alph release or track latest? Recommend pinning to current stable (`^0.1.34`) and testing upgrades explicitly.
-3. **`tasks` registry pool_home path**: `~/.fin/pools/` is proposed. Should it be `~/.local/share/fin/` (XDG)? Decide before Phase A.2 config tests are written.
-4. **Bulk editor format**: Current fin editor format is one task per line with checkbox prefix. Keep identical for muscle memory, or take the opportunity to use alph's Markdown format natively in the editor? Recommend keeping existing format for UX continuity.
-5. **fin package name**: `fin-cli` (PyPI) to avoid collision with existing `fin` packages.
+### Resolved
+
+1. **New repo vs. fork**: `AlpheusCEF/fin-cli` — fresh repo, blank slate. ✓
+2. **alph version pinning**: `alph_interface.py` is the contract. Pin `alph = ">=0.1.34,<0.2.0"` in pyproject.toml; only `alph_interface.py` absorbs breaking changes. ✓
+3. **`tasks` registry pool_home path**: `~/.fin/pools/` — confirmed. ✓
+4. **Bulk editor format**: Intermediary `FinEditDoc` YAML structure with two presentations (compact default, YAML opt-in). Editor priming for fold-to-summary-line UX. ✓
+5. **Distribution**: Same AlpheusCEF Homebrew tap pattern as `alph`. `brew install fin` via `AlpheusCEF/homebrew-tap`. `alph` declared as a formula dependency. ✓
+
+### Still Open
+
+6. **fin package name (PyPI)**: `fin-cli` to avoid collision — confirm before Phase D.
+7. **Compact editor parse tolerance**: When a user edits a compact-format line (one-liner), how strictly do we parse it? Recommend: compact format is write-only for display, YAML format is the edit target. Compact view in `fin list`, YAML in editor. Simplifies parsing significantly.
+8. **`notes:` field in alph node**: alph snapshot nodes use free-form Markdown below the `---` frontmatter separator. `notes:` content maps to node body. Confirm this is the right mapping before A.3 parser tests are written.
