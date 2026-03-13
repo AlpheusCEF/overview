@@ -490,6 +490,10 @@ Same pattern as `alph` — same tap, same release workflow shape.
 
 ### Still Open
 
-6. **fin package name (PyPI)**: `fin-cli` to avoid collision — confirm before Phase D.
-7. **Compact editor parse tolerance**: When a user edits a compact-format line (one-liner), how strictly do we parse it? Recommend: compact format is write-only for display, YAML format is the edit target. Compact view in `fin list`, YAML in editor. Simplifies parsing significantly.
-8. **`notes:` field in alph node**: alph snapshot nodes use free-form Markdown below the `---` frontmatter separator. `notes:` content maps to node body. Confirm this is the right mapping before A.3 parser tests are written.
+6. ~~**fin package name (PyPI)**~~ — no PyPI release planned. Homebrew only. ✓
+7. **Compact editor parse tolerance**: Compact is display-only; YAML is the edit target. ✓
+8. **`notes:` field in alph node**: alph snapshot nodes use free-form Markdown below the `---` frontmatter separator. `notes:` content maps to node body. Confirmed as right mapping — `create_node(content=notes_text)` writes it below the separator. ✓
+
+### Still Open
+
+9. **`update_node()` in alph core** — see feasibility assessment below. Must be resolved before Phase B work begins.
