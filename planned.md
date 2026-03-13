@@ -2,9 +2,8 @@
 
 What was planned, what was built, and the key decisions that shaped each phase.
 
-**Released version**: v0.1.34 (Homebrew)
-**Dev status**: content_type, update_node, --tags/--meta/--related-to, and meta display pending next release
-**Test count**: 411 passing, mypy strict clean, ruff clean
+**Released version**: v0.1.35 (Homebrew)
+**Test count**: 412 passing, mypy strict clean, ruff clean
 
 ---
 
