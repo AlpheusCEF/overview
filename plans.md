@@ -9,36 +9,14 @@ What we're planning to build next, organized by priority and horizon.
 ## Suggested Sequence
 
 ```
-1. Search (alph + barrel)  <- shallow node search + deep cached content search (next up)
-2. Gateway function        <- adapter foundation, then pause
+1. Gateway function        <- adapter foundation, then pause
 ```
 
-Barrel shipped in v0.1.37-v0.1.40 (cache, timeline, export, skill install, MCP config, creator default). Search is next — builds on barrel for the deep tier. Gateway is the last item before we pause active development.
+Barrel shipped in v0.1.37-v0.1.40. Search shipped in v0.1.41. Gateway is the last item before we pause active development.
 
 ---
 
 ## Near Term: Known Needs
-
-### Search — two tiers
-
-Two complementary search commands at different depths:
-
-**`alph search "keyword"`** — shallow, node-level
-- Grep across node frontmatter (context, tags, meta) and body text
-- Works on the node files themselves — no barrel needed
-- Fast, always available, answers "do I have a node about X?"
-
-**`barrel search "keyword"`** — deep, hydrated content
-- Grep across cached barrel content (the actual resolved live content)
-- Only searches what's been hydrated — barrel must exist
-- Answers "does any of my source material mention X?"
-- Useful for finding things buried in a 50-page design doc or a week of Slack messages
-
-Both return node IDs, context summaries, and matching excerpts. Claude can use either depending on whether it needs node-level or content-level results.
-
-**Implementation:** Both are structured grep — walk files, parse frontmatter, match against query. No indexing, no embeddings. Simple and deterministic.
-
----
 
 ### Lightweight task views in alph
 
