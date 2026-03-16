@@ -1,7 +1,7 @@
 # AlpheusCEF: State of the Project
 
 **Date**: 2026-03-16
-**Status**: Phase 1, Phase 2 (distribution + MCP), remote registry support, content_type system, update_node, and registry-scoped hydration complete and shipping
+**Status**: Phase 1, Phase 2 (distribution + MCP), remote registry support, content_type system, update_node, registry-scoped hydration, barrel (hydration cache), skill management, and MCP auto-config complete and shipping
 
 ---
 
@@ -210,6 +210,18 @@ Registries are declared in the alph config file alongside other settings. All re
 | `alph config list` | | Show config discovery tree with exists/missing status |
 | `alph config show <path>` | | Display a config file with syntax highlighting |
 | `alph defaults` | | Show resolved creator, registry, pool, and pool path from current config |
+| `alph barrel status` | `alph b status` | Show barrel cache entries with age and freshness |
+| `alph barrel check <id>` | `alph b check` | Check if a cached entry is fresh, stale, or missing |
+| `alph barrel write <id>` | `alph b write` | Cache hydrated content with standardized frontmatter |
+| `alph barrel invalidate <id>` | `alph b invalidate` | Remove a specific cache entry |
+| `alph barrel flush` | `alph b flush` | Remove all cache entries in a pool |
+| `alph barrel new` | `alph b new` | Show entries cached since last read |
+| `alph barrel mark-read` | `alph b mark-read` | Update the timeline read cursor |
+| `alph barrel export` | `alph b export` | Export cached content (md/json/yaml) |
+| `alph skill install` | | Install SKILL.md symlink + configure MCP server in Claude settings |
+| `alph skill status` | | Check skill and MCP configuration state |
+
+`alph barrel` (aliases: `bar`, `b`) defaults to `status` when no subcommand is given.
 
 Global options: `alph --registry <id-or-url>` (also `-r`, `--reg`) scopes pool resolution to a specific registry for one invocation. `alph --branch <name>` overrides the git branch for remote operations. `--pool` accepts `-p`. Global options must appear before the subcommand.
 
@@ -304,11 +316,11 @@ Python 3.12+, Poetry for dependency management, FastMCP 3.x for the MCP server l
 
 ## What Has Been Built
 
-Phase 1, Phase 2, remote registry support, content_type system, update_node, and registry-scoped hydration are complete. Released version is v0.1.36 (Homebrew). Hydration config, relaxed slack validation, registry-aware show/validate, MCP hydration support, and SKILL.md rewrite are the latest additions.
+Phase 1, Phase 2, remote registry support, content_type system, update_node, registry-scoped hydration, barrel (hydration cache), skill management, and MCP auto-config are complete. Released version is v0.1.40 (Homebrew). Latest additions: barrel CLI (`alph barrel`/`bar`/`b`), `alph skill install` (SKILL.md symlink + MCP server config), creator defaults to system username, starter `hydration.yaml` on registry init.
 
 ### Core Engine (`alph-cli` repo, `src/alph/`)
 
-- **`core.py`**: All production logic. Framework-agnostic. Fully type-annotated (mypy strict). Functions: `load_config`, `init_registry`, `init_pool`, `create_node`, `update_node`, `generate_id`, `check_idempotency`, `validate_node`, `validate_pool`, `validate_config_keys`, `validate_config_integrity`, `check_git_state`, `list_nodes`, `list_pools`, `show_node`, `resolve_pool_name`, `collect_registries`, `find_registry_config`, `find_registry_for_pool`, `load_hydration_config`, `is_remote_registry`, `parse_remote_registry`, `effective_mode`. Data types: `HydrationTypeConfig`, `HydrationConfig` (frozen dataclasses for registry-scoped resolution config). `update_node()` modifies existing node frontmatter and/or body with full validation, no-op detection, tags add/remove/replace, meta merge, content/context replacement, content_type change, and related_to add/replace. `_find_node_file()` helper shared by `check_idempotency`, `show_node`, and `update_node`. `content_type` field supports: `text`, `gdoc`, `slack`, `jira`, `confluence`, `email`, `image`, `figma`, `task`. `validate_node` accepts `registry_types` parameter for custom types declared in `hydration.yaml`. `show_node` accepts `hydration` parameter and populates `NodeDetail.hydration_instructions` when content_type matches. Slack validation relaxed: `url OR channel` (thread_ts is optional). Pool dotfiles (`.alph.yaml`) for pool-local metadata; `register_subdir_pools` config key controls whether subdir pools also get config entries (default: false). Config write operations use ruamel.yaml to preserve YAML comments. Reserved names: `all`, `alph`. `resolve_pool_name` falls back to directory existence for bare pool names not explicitly declared in the pools dict. `validate_config_integrity` checks that `default_registry` references a declared registry.
+- **`core.py`**: All production logic. Framework-agnostic. Fully type-annotated (mypy strict). Functions: `load_config`, `init_registry`, `init_pool`, `create_node`, `update_node`, `generate_id`, `check_idempotency`, `validate_node`, `validate_pool`, `validate_config_keys`, `validate_config_integrity`, `check_git_state`, `list_nodes`, `list_pools`, `show_node`, `resolve_pool_name`, `collect_registries`, `find_registry_config`, `find_registry_for_pool`, `load_hydration_config`, `load_barrel_config`, `barrel_write`, `barrel_check`, `barrel_status`, `barrel_invalidate`, `barrel_flush`, `barrel_new`, `barrel_mark_read`, `barrel_export`, `is_remote_registry`, `parse_remote_registry`, `effective_mode`. Data types: `HydrationTypeConfig`, `HydrationConfig`, `BarrelEntry`, `BarrelStatus`, `BarrelMeta`, `BarrelConfig`, `BarrelTypeConfig` (frozen dataclasses). `update_node()` modifies existing node frontmatter and/or body with full validation, no-op detection, tags add/remove/replace, meta merge, content/context replacement, content_type change, and related_to add/replace. `_find_node_file()` helper shared by `check_idempotency`, `show_node`, and `update_node`. `content_type` field supports: `text`, `gdoc`, `slack`, `jira`, `confluence`, `email`, `image`, `figma`, `task`. `validate_node` accepts `registry_types` parameter for custom types declared in `hydration.yaml`. `show_node` accepts `hydration` parameter and populates `NodeDetail.hydration_instructions` when content_type matches. Slack validation relaxed: `url OR channel` (thread_ts is optional). `init_registry` creates starter `hydration.yaml` with barrel defaults for local registries. `load_config` falls back to `getpass.getuser()` when no creator is configured. Pool dotfiles (`.alph.yaml`) for pool-local metadata; `register_subdir_pools` config key controls whether subdir pools also get config entries (default: false). Config write operations use ruamel.yaml to preserve YAML comments. Reserved names: `all`, `alph`. `resolve_pool_name` falls back to directory existence for bare pool names not explicitly declared in the pools dict. `validate_config_integrity` checks that `default_registry` references a declared registry.
 - **`remote.py`**: Remote registry access. `GitHubProvider` (GraphQL batch reads), `RemoteProvider` protocol, `resolve_pool_readonly` (ephemeral tmpdir), clone management (`clone_remote_registry`, `pull_remote_registry`, `push_remote_registry`, `default_clone_dir`). SSH host alias resolution via `~/.ssh/config` — URLs like `git@github-personal:org/repo.git` are correctly identified when the alias maps to `github.com`. All three git ops accept `ssh_command=` to inject `GIT_SSH_COMMAND` into the subprocess env. Pull uses `--rebase` (replaced `--ff-only`) to handle diverged branches from multiple writers. `list_remote_pools` lists pool directories from the remote via the GraphQL API. `fetch_remote_pools_cached` wraps it with a disk cache (`~/.cache/alph/completion/<hash>.json`) using a configurable TTL (default 60 s).
 - **`cli.py`**: Typer wrapper. Commands: `registry init`, `registry list`, `registry check` (including `check all`), `registry clone`, `registry pull`, `registry push`, `registry status` (including `status all`), `pool init`, `pool list`, `add` (`a`), `list` (`l`), `show` (`s`), `validate` (`v`), `config list`, `config show`, `config check`, `config show-all`, `defaults`, `examples` (hidden). `reg` is a shorthand for `registry`; `registry`, `pool`, and `config` with no subcommand default to `list`. Registry commands (`check`, `clone`, `pull`, `push`, `status`) default to `default_registry` when no argument given. Global `--registry` (`-r`/`--reg`) and `--branch` options; `--pool` accepts `-p`. Per-command `-v`/`--verbose` flag and `--pull` flag on read commands. Default registry/pool resolution from config with remote URL support. Reserved names (`all`, `alph`) rejected by `registry init` and `pool init`. `config check` validates referential integrity — warns when `default_registry` names a registry not declared in config. Auto-push failures are elevated to errors with a `registry push <id>` recovery hint. `registry status` shows unpushed commit count for cloned RW registries. **Tab completion**: `autocompletion=` wired to registry ID arguments (`_complete_registry_id`) and `--pool/-p` options (`_complete_pool`). Local registries and RW remote clones are scanned from disk; RO remote registries are queried via the forge API only when `completion_remote: true` is set (global or per-registry), with results cached for `completion_cache_ttl` seconds (default 60). `completion_remote` defaults to `false` — no network calls during tab completion unless opted in. `completions show [shell]` prints the completion script to stdout; `completions install [shell]` writes it to the standard location and prints activation instructions. Typer's built-in `--install-completion` is left enabled (`add_completion=True` — disabling it breaks runtime completion) but superseded by these commands. The generated completion script is stripped of Typer's leading newline so zsh `compinit` recognises the `#compdef` directive at byte 0.
 - **`mcp_server.py`**: FastMCP 3.x wrapper. One tool per core function. Tools: `add_node` (with `meta`, `related_to`, `content_type` params), `list_pool_nodes`, `show_pool_node` (returns `hydration_instructions`), `validate_pool` (accepts registry-declared custom types), `update_pool_node`. Registry-aware hydration: loads config from alph config cascade, finds owning registry, loads `hydration.yaml`. MCP instructions updated to guide LLMs on following hydration instructions. Detailed docstrings, MCP annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`), dual output (`text` + `json`). Transparent remote pool support via `_resolve_pool` context manager.
@@ -316,16 +328,16 @@ Phase 1, Phase 2, remote registry support, content_type system, update_node, and
 
 ### Test Suite
 
-443 tests passing (26 new for hydration config, registry-aware validation, show_node hydration, MCP hydration, slack validation relaxation). Full TDD — every production function written test-first. mypy strict clean, ruff clean.
+488 tests passing. Full TDD — every production function written test-first. mypy strict clean, ruff clean.
 
 ### Distribution
 
-- **Homebrew tap**: `AlpheusCEF/homebrew-tap`, formula at v0.1.36. `brew tap AlpheusCEF/tap && brew install alph` installs `alph`, `alph-mcp` binaries, `man alph` man page, and zsh/bash/fish tab completion scripts. Formula uses `preserve_rpath` to avoid Rust-extension dylib relocation issues. Completion scripts are generated at install time via `_ALPH_COMPLETE=source_<shell>` with leading-newline stripping. Formula includes a `caveats` block explaining `fpath` setup for zsh (including Oh My Zsh timing considerations).
+- **Homebrew tap**: `AlpheusCEF/homebrew-tap`, formula at v0.1.40. `brew tap AlpheusCEF/tap && brew install alph` installs `alph`, `alph-mcp` binaries, `man alph` man page, SKILL.md to `share/alph/`, and zsh/bash/fish tab completion scripts. After install, `alph skill install` creates the SKILL.md symlink and configures the MCP server. Formula uses `preserve_rpath` to avoid Rust-extension dylib relocation issues. Completion scripts are generated at install time via `_ALPH_COMPLETE=source_<shell>` with leading-newline stripping.
 - **GitHub Actions**: CI runs tests, mypy, ruff on every push/PR. Release workflow builds sdist and updates homebrew-tap formula automatically on tag.
 
 ### SKILL.md
 
-Installed at `~/.claude/skills/context-architect/SKILL.md`. Orients Claude to use the MCP tools rather than duplicating their logic. Includes hydration workflow: when `show_pool_node` returns `hydration_instructions`, follow them to resolve live node content. Generic fallback patterns for built-in content types. Does not hardcode registry-specific details.
+Symlinked from `~/.claude/skills/context-architect/SKILL.md` to `/opt/homebrew/share/alph/SKILL.md` (auto-updates on brew upgrade). Set up via `alph skill install`. Covers: MCP tools, barrel CLI usage, hydration workflow with cache, context queries synthesis pattern, temporal reasoning, hydration failure handling, content type table with required meta fields. Does not hardcode registry-specific details.
 
 ### Demo Data
 
@@ -355,22 +367,40 @@ Live nodes point at external resources but don't carry instructions for how to f
 **`hydration.yaml`** lives at registry root (alongside pool directories). Example:
 
 ```yaml
-# hydration.yaml — spp registry
+# hydration.yaml — created automatically by alph registry init
 types:
   gdoc:
     provider: google-docs-mcp
-    instructions: "Use the Google Docs MCP server to fetch document content. Authenticate via workspace SSO."
+    instructions: "Use the Google Docs MCP server to fetch document content."
   confluence:
     provider: atlassian-mcp
     base_url: https://life360.atlassian.net
-    instructions: "Use the Atlassian MCP server. Pages are in the life360 Confluence instance."
+    instructions: "Use the Atlassian MCP server for Confluence pages."
   jira:
     provider: atlassian-mcp
     base_url: https://life360.atlassian.net
-    instructions: "Use the Atlassian MCP server to fetch issue details from life360 Jira."
+    instructions: "Use the Atlassian MCP server for Jira issues."
   slack:
     provider: slack-mcp
     instructions: "Use the Slack MCP server. Channel name is in meta.channel."
+
+barrel:
+  default_ttl: 4h
+  types:
+    snapshot:
+      ttl: forever
+      fetch_mode: full
+    jira:
+      ttl: 2h
+      fetch_mode: full
+    slack:
+      ttl: 1h
+      fetch_mode: delta
+
+context_queries:
+  latest_state:
+    matches: latest state, current status, where are we
+    instructions: "Synthesize a status update from all hydrated content."
 ```
 
 **Key properties:**
@@ -387,9 +417,9 @@ types:
 
 ### What Remains Unbuilt
 
-- Remote providers: GitLab, Bitbucket, and git fallback (shallow sparse clone) — deferred
-- Unregistered pool notice — designed in FUTURE.md, not yet implemented
+- `alph search` / `barrel search` — node-level and cached content search
+- Gateway function for standardizing messy input — adapter foundation
 - Input adapters (Slack, Google Docs, Jira, email, etc.) — Phase 3
-- Timeline state (`.timeline-state.json`) — deferred to Phase 3 with first live adapter
-- Gateway function for standardizing messy input — Phase 3
+- Unregistered pool notice — informational warning on unregistered pools
+- Git fallback provider (shallow sparse clone) — deferred
 - PWA, browser extension, mobile — Phase 5

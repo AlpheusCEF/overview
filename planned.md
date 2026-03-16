@@ -2,8 +2,8 @@
 
 What was planned, what was built, and the key decisions that shaped each phase.
 
-**Released version**: v0.1.36 (Homebrew)
-**Test count**: 443 passing, mypy strict clean, ruff clean
+**Released version**: v0.1.40 (Homebrew)
+**Test count**: 488 passing, mypy strict clean, ruff clean
 
 ---
 
