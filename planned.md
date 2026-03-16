@@ -2,8 +2,8 @@
 
 What was planned, what was built, and the key decisions that shaped each phase.
 
-**Released version**: v0.1.35 (Homebrew)
-**Test count**: 412 passing, mypy strict clean, ruff clean
+**Released version**: v0.1.36 (Homebrew)
+**Test count**: 443 passing, mypy strict clean, ruff clean
 
 ---
 
@@ -79,9 +79,9 @@ The missing third leg: `source` = WHO made the node, `node_type` = HOW stored, `
 ### Design decisions
 
 - `content_type` excluded from ID hash — preserves idempotency
-- Closed enum with clear error messages for unknown values
+- Closed enum with clear error messages for unknown values; registries can declare custom types via `hydration.yaml`
 - `task` type has no required meta — flexible for fin-cli integration
-- `custom:` prefix for user-defined types — not yet implemented, low priority
+- Slack validation relaxed: `url OR channel` (thread_ts optional — channel-only reference is valid)
 
 ---
 
@@ -100,6 +100,30 @@ In-place modification of existing nodes — prerequisite for fin-cli Phase B and
 - **Helper**: `_find_node_file()` extracted from `show_node()`/`check_idempotency()` for shared lookup
 - **CLI**: `alph update <id> [--status] [--tags-add] [--tags-remove] [--meta] [--content] [--context] [--ct] [--related-add]`
 - **MCP**: `tool_update_node` / `update_pool_node` with all update fields
+
+---
+
+## Registry-Scoped Hydration
+
+Resolving live nodes to their current content — registry-scoped because the same content type may require different auth, workspace, or MCP server depending on which registry owns the node.
+
+### What shipped
+
+- **Data types** (`core.py`): `HydrationTypeConfig` and `HydrationConfig` frozen dataclasses. `HydrationConfig.declared_types` property for the set of registry-declared types
+- **Config loading** (`core.py`): `load_hydration_config()` reads `hydration.yaml` from registry root; `find_registry_for_pool()` finds the owning registry by longest-prefix match (local paths and remote RW clone paths)
+- **Validation** (`core.py`): `validate_node(registry_types=)` accepts custom content types declared in hydration.yaml; built-in types still validated strictly
+- **Show** (`core.py`): `show_node(hydration=)` populates `NodeDetail.hydration_instructions` when content_type matches a declared type
+- **CLI**: `alph show` displays `hydration:` line when instructions are available; `alph validate` loads registry types automatically from hydration.yaml
+- **MCP**: `show_pool_node` returns `hydration_instructions` field; `validate_pool` accepts registry-declared custom types; MCP instructions updated to guide LLMs on following hydration instructions
+- **SKILL.md**: Rewritten with hydration workflow, generic fallback patterns per content type, installed at `~/.claude/skills/context-architect/SKILL.md`
+- **SPP registry**: First real registry with hydration.yaml (gdoc, confluence, jira, slack). All 6 socialauth nodes pass validation
+- **human_test.sh**: Section 19 covers hydration config end-to-end
+
+### Design decisions
+
+- Three-layer resolution: SKILL.md (generic) -> hydration.yaml (registry-specific) -> node meta (per-resource)
+- Registry-declared custom types skip meta validation — the registry author defines requirements via instructions
+- No pool-level overrides planned; registry scope is sufficient for now
 
 ---
 

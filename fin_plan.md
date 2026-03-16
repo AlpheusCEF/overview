@@ -7,7 +7,7 @@
 ## The Idea
 
 `fin` is a battle-tested daily task CLI. Its UX is fast and intuitive — `fin "do the thing"`, `fin`, `fins` — and worth keeping. But its backend is SQLite with no relationship to the AlpheusCEF context model.
-
+https://github.com/chasemp/fin-cli
 The insight: fin's primitives map cleanly onto alph's primitives. Tasks are snapshot nodes. Contexts are pools. Labels are tags. Swapping SQLite for alph core gives:
 
 - **Persistent, portable, human-readable tasks** (Markdown + YAML, not binary DB)

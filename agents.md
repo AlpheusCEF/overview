@@ -28,5 +28,5 @@ See [agents/agents.md](../agents/agents.md) for the wiring instructions.
 ## Project context
 
 - [STATE.md](STATE.md) — full design and current status
-- [PLAN.md](PLAN.md) — phased implementation plan
-- [FUTURE.md](FUTURE.md) — future horizons and open questions
+- [planned.md](planned.md) — completed work history
+- [plans.md](plans.md) — future plans and priorities
