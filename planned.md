@@ -127,6 +127,33 @@ Resolving live nodes to their current content — registry-scoped because the sa
 
 ---
 
+## fin-cli: Task Management over alph
+
+`fin` reimplements the battle-tested fin task CLI on top of alph as a library. Tasks are snapshot nodes with `content_type: task`. Published to Homebrew as v0.1.0.
+
+### What shipped
+
+- **Phase A** (complete): Repo scaffolding, alph interface layer (`alph_interface.py`), config, content parser, add/list/close/dismiss/open tasks, short-hash ID resolution, priority bucket display, CLI entry points (`fin`, `fins`, `fine`)
+- **Phase B** (complete): Bulk editor with intermediary YAML format, completed view, status/label filtering, recurring tasks, dependencies, context management, fin config
+- **Phase C** (partial): Cross-pool `fin list --all`, `fin link <id> <id>`, `fin log <id>`, `fin diff <id>`
+- **Phase D** (partial): Homebrew formula published (v0.1.0), CI/CD working
+
+### Remaining
+
+- **C.2**: MCP access verification + SKILL fragment ✅
+- ~~C.5~~: Folded into barrel CLI (`barrel export`)
+- ~~D.1~~: Dropped (legacy fin-cli deprecated, not worth bridging)
+
+### Key design decisions
+
+- `alph_interface.py` as versioned contract — fin never imports `alph.*` directly
+- Tasks registry at `~/.fin/pools/`, each fin context = one pool
+- Short-hash prefix matching (6-char display, full 12-char always resolves)
+- Editor operates on staged strings, never launches editor in tests
+- Legacy chasemp/fin-cli deprecated in favor of AlpheusCEF/fin-cli
+
+---
+
 ## Development Principles (All Phases)
 
 These held throughout and remain in effect:

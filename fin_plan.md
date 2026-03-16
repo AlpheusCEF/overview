@@ -163,21 +163,21 @@ All-or-nothing: parse errors surfaced before any actions apply.
 
 **Milestone**: fin gains capabilities impossible with SQLite.
 
-- **C.1 Cross-context view**: `fin list --all-contexts` — query all pools in `tasks` registry, merge results
-- **C.2 MCP access**: Verify alph MCP tools work against fin's `tasks` registry pools. Write SKILL fragment for fin tag conventions
-- **C.3 Related tasks**: `fin link <id> <id>` — add `related_to` reference, cross-pool supported
-- **C.4 Git history**: `fin log <id>`, `fin diff <id>` — thin shell delegation to git
-- **C.5 Export/import**: `fin export --format json|csv|txt`, `fin import <file>` — round-trip, idempotent via SHA dedup
+- **C.1 Cross-context view**: `fin list --all` — query all pools in `tasks` registry ✅
+- **C.2 MCP access**: Verify alph MCP tools work against fin's `tasks` registry pools. Write SKILL fragment for fin tag conventions ✅
+- **C.3 Related tasks**: `fin link <id> <id>` — add `related_to` reference, cross-pool supported ✅
+- **C.4 Git history**: `fin log <id>`, `fin diff <id>` — thin shell delegation to git ✅
+- ~~**C.5 Export/import**~~: Folded into barrel CLI (`barrel export`). Cached content is already markdown; barrel gives this for free across all pools, not just fin tasks.
 
 ---
 
 ### Phase D: Distribution
 
-**Milestone**: `brew install fin` works. Existing users can migrate.
+**Milestone**: `brew install fin` works.
 
-- **D.1 Migration tool**: `fin migrate --from <sqlite_db_path>` — read SQLite, create nodes preserving timestamps/labels/status. Idempotent
-- **D.2 Homebrew formula**: Same tap (`AlpheusCEF/homebrew-tap`), `alph` as formula dependency
-- **D.3 CI/CD**: GitHub Actions on push/PR and release
+- ~~**D.1 Migration tool**~~: Dropped. Legacy chasemp/fin-cli deprecated; not worth building a bridge.
+- **D.2 Homebrew formula**: Published as v0.1.0, `alph-cli` as resource dependency ✅
+- **D.3 CI/CD**: GitHub Actions on push/PR and release ✅
 
 ---
 
