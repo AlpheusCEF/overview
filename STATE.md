@@ -1,7 +1,7 @@
 # AlpheusCEF: State of the Project
 
-**Date**: 2026-03-13
-**Status**: Phase 1, Phase 2 (distribution + MCP), remote registry support, content_type system, and update_node complete and shipping
+**Date**: 2026-03-16
+**Status**: Phase 1, Phase 2 (distribution + MCP), remote registry support, content_type system, update_node, and registry-scoped hydration complete and shipping
 
 ---
 
@@ -263,7 +263,8 @@ Python 3.12+, Poetry for dependency management, FastMCP 3.x for the MCP server l
 - Remote registries: two-mode architecture (RO via GitHub GraphQL API, RW via local clone); `mode: ro | rw` config per registry; `auto_push` for RW remotes; SSH host aliases resolved via `~/.ssh/config` for forge detection; `ssh_command` registry key sets `GIT_SSH_COMMAND` for all git ops on that registry
 - `defaults_reminder: false` top-level config key suppresses the "not set as default" hint printed by `alph registry init`
 - Reserved names: `all` is reserved and cannot be used as a registry ID or pool name
-- `content_type` field: closed enum (`text`, `gdoc`, `slack`, `jira`, `confluence`, `email`, `image`, `figma`, `task`) with type-specific meta validation; `task` type has no required meta (flexible by design)
+- `content_type` field: built-in types (`text`, `gdoc`, `slack`, `jira`, `confluence`, `email`, `image`, `figma`, `task`) with type-specific meta validation; `task` type has no required meta (flexible by design). Registries can define additional content types via `hydration.yaml` at registry root — the built-in set is validated strictly, custom types are valid if declared by the registry
+- Hydration is registry-scoped: each registry declares how to resolve its content types (provider, auth, base URLs) in a `hydration.yaml` at registry root. Same content type (e.g. `gdoc`) may resolve differently across registries (different workspaces, auth, MCP servers). Three-layer resolution: SKILL.md (ships with alph, generic patterns) → registry `hydration.yaml` (registry-specific providers and config) → node `meta` (per-resource identifiers like url, doc_id, channel)
 - `update_node()` for in-place frontmatter/body modification with validation, no-op detection, and auto-commit
 - Validator checks both nodes and registry
 - `alph list` and `alph show` for human inspection
@@ -280,7 +281,7 @@ Python 3.12+, Poetry for dependency management, FastMCP 3.x for the MCP server l
 
 ### Decisions Deferred
 - Airtable as a potential UI/dashboard layer (explored, parked)
-- Specific MCP server configurations (Google Docs, Jira)
+- ~~Specific MCP server configurations (Google Docs, Jira)~~ → resolved: registry-scoped hydration config
 - Slack bot app name and setup
 - Domain registration (alpheus.io/dev/ai)
 - PWA design
@@ -303,32 +304,86 @@ Python 3.12+, Poetry for dependency management, FastMCP 3.x for the MCP server l
 
 ## What Has Been Built
 
-Phase 1, Phase 2, remote registry support, content_type system, and update_node are complete. Released version is v0.1.34 (Homebrew). Content_type, update_node, --tags/--meta/--related-to flags, and meta display in `alph show` are implemented and tested but pending the next release tag.
+Phase 1, Phase 2, remote registry support, content_type system, update_node, and registry-scoped hydration are complete. Released version is v0.1.36 (Homebrew). Hydration config, relaxed slack validation, registry-aware show/validate, MCP hydration support, and SKILL.md rewrite are the latest additions.
 
 ### Core Engine (`alph-cli` repo, `src/alph/`)
 
-- **`core.py`**: All production logic. Framework-agnostic. Fully type-annotated (mypy strict). Functions: `load_config`, `init_registry`, `init_pool`, `create_node`, `update_node`, `generate_id`, `check_idempotency`, `validate_node`, `validate_pool`, `validate_config_keys`, `validate_config_integrity`, `check_git_state`, `list_nodes`, `list_pools`, `show_node`, `resolve_pool_name`, `collect_registries`, `find_registry_config`, `is_remote_registry`, `parse_remote_registry`, `effective_mode`. `update_node()` modifies existing node frontmatter and/or body with full validation, no-op detection, tags add/remove/replace, meta merge, content/context replacement, content_type change, and related_to add/replace. `_find_node_file()` helper shared by `check_idempotency`, `show_node`, and `update_node`. `content_type` field supports: `text`, `gdoc`, `slack`, `jira`, `confluence`, `email`, `image`, `figma`, `task`. Pool dotfiles (`.alph.yaml`) for pool-local metadata; `register_subdir_pools` config key controls whether subdir pools also get config entries (default: false). Config write operations use ruamel.yaml to preserve YAML comments. Reserved names: `all`, `alph`. `resolve_pool_name` falls back to directory existence for bare pool names not explicitly declared in the pools dict. `validate_config_integrity` checks that `default_registry` references a declared registry.
+- **`core.py`**: All production logic. Framework-agnostic. Fully type-annotated (mypy strict). Functions: `load_config`, `init_registry`, `init_pool`, `create_node`, `update_node`, `generate_id`, `check_idempotency`, `validate_node`, `validate_pool`, `validate_config_keys`, `validate_config_integrity`, `check_git_state`, `list_nodes`, `list_pools`, `show_node`, `resolve_pool_name`, `collect_registries`, `find_registry_config`, `find_registry_for_pool`, `load_hydration_config`, `is_remote_registry`, `parse_remote_registry`, `effective_mode`. Data types: `HydrationTypeConfig`, `HydrationConfig` (frozen dataclasses for registry-scoped resolution config). `update_node()` modifies existing node frontmatter and/or body with full validation, no-op detection, tags add/remove/replace, meta merge, content/context replacement, content_type change, and related_to add/replace. `_find_node_file()` helper shared by `check_idempotency`, `show_node`, and `update_node`. `content_type` field supports: `text`, `gdoc`, `slack`, `jira`, `confluence`, `email`, `image`, `figma`, `task`. `validate_node` accepts `registry_types` parameter for custom types declared in `hydration.yaml`. `show_node` accepts `hydration` parameter and populates `NodeDetail.hydration_instructions` when content_type matches. Slack validation relaxed: `url OR channel` (thread_ts is optional). Pool dotfiles (`.alph.yaml`) for pool-local metadata; `register_subdir_pools` config key controls whether subdir pools also get config entries (default: false). Config write operations use ruamel.yaml to preserve YAML comments. Reserved names: `all`, `alph`. `resolve_pool_name` falls back to directory existence for bare pool names not explicitly declared in the pools dict. `validate_config_integrity` checks that `default_registry` references a declared registry.
 - **`remote.py`**: Remote registry access. `GitHubProvider` (GraphQL batch reads), `RemoteProvider` protocol, `resolve_pool_readonly` (ephemeral tmpdir), clone management (`clone_remote_registry`, `pull_remote_registry`, `push_remote_registry`, `default_clone_dir`). SSH host alias resolution via `~/.ssh/config` — URLs like `git@github-personal:org/repo.git` are correctly identified when the alias maps to `github.com`. All three git ops accept `ssh_command=` to inject `GIT_SSH_COMMAND` into the subprocess env. Pull uses `--rebase` (replaced `--ff-only`) to handle diverged branches from multiple writers. `list_remote_pools` lists pool directories from the remote via the GraphQL API. `fetch_remote_pools_cached` wraps it with a disk cache (`~/.cache/alph/completion/<hash>.json`) using a configurable TTL (default 60 s).
 - **`cli.py`**: Typer wrapper. Commands: `registry init`, `registry list`, `registry check` (including `check all`), `registry clone`, `registry pull`, `registry push`, `registry status` (including `status all`), `pool init`, `pool list`, `add` (`a`), `list` (`l`), `show` (`s`), `validate` (`v`), `config list`, `config show`, `config check`, `config show-all`, `defaults`, `examples` (hidden). `reg` is a shorthand for `registry`; `registry`, `pool`, and `config` with no subcommand default to `list`. Registry commands (`check`, `clone`, `pull`, `push`, `status`) default to `default_registry` when no argument given. Global `--registry` (`-r`/`--reg`) and `--branch` options; `--pool` accepts `-p`. Per-command `-v`/`--verbose` flag and `--pull` flag on read commands. Default registry/pool resolution from config with remote URL support. Reserved names (`all`, `alph`) rejected by `registry init` and `pool init`. `config check` validates referential integrity — warns when `default_registry` names a registry not declared in config. Auto-push failures are elevated to errors with a `registry push <id>` recovery hint. `registry status` shows unpushed commit count for cloned RW registries. **Tab completion**: `autocompletion=` wired to registry ID arguments (`_complete_registry_id`) and `--pool/-p` options (`_complete_pool`). Local registries and RW remote clones are scanned from disk; RO remote registries are queried via the forge API only when `completion_remote: true` is set (global or per-registry), with results cached for `completion_cache_ttl` seconds (default 60). `completion_remote` defaults to `false` — no network calls during tab completion unless opted in. `completions show [shell]` prints the completion script to stdout; `completions install [shell]` writes it to the standard location and prints activation instructions. Typer's built-in `--install-completion` is left enabled (`add_completion=True` — disabling it breaks runtime completion) but superseded by these commands. The generated completion script is stripped of Typer's leading newline so zsh `compinit` recognises the `#compdef` directive at byte 0.
-- **`mcp_server.py`**: FastMCP 3.x wrapper. One tool per core function. Tools: `add_node` (with `meta`, `related_to`, `content_type` params), `list_pool_nodes`, `show_pool_node`, `validate_pool`, `update_pool_node`. Detailed docstrings, MCP annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`), dual output (`text` + `json`). Transparent remote pool support via `_resolve_pool` context manager.
+- **`mcp_server.py`**: FastMCP 3.x wrapper. One tool per core function. Tools: `add_node` (with `meta`, `related_to`, `content_type` params), `list_pool_nodes`, `show_pool_node` (returns `hydration_instructions`), `validate_pool` (accepts registry-declared custom types), `update_pool_node`. Registry-aware hydration: loads config from alph config cascade, finds owning registry, loads `hydration.yaml`. MCP instructions updated to guide LLMs on following hydration instructions. Detailed docstrings, MCP annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`), dual output (`text` + `json`). Transparent remote pool support via `_resolve_pool` context manager.
 - **`man/alph.1`**: Comprehensive man page covering all commands, config keys, node schema, environment variables, and examples. Installed by Homebrew formula.
 
 ### Test Suite
 
-411 tests passing (32 new for content_type, update_node, CLI flags, MCP tools; 4 for meta display in show). Full TDD — every production function written test-first. mypy strict clean, ruff clean.
+443 tests passing (26 new for hydration config, registry-aware validation, show_node hydration, MCP hydration, slack validation relaxation). Full TDD — every production function written test-first. mypy strict clean, ruff clean.
 
 ### Distribution
 
-- **Homebrew tap**: `AlpheusCEF/homebrew-tap`, formula at v0.1.34. `brew tap AlpheusCEF/tap && brew install alph` installs `alph`, `alph-mcp` binaries, `man alph` man page, and zsh/bash/fish tab completion scripts. Formula uses `preserve_rpath` to avoid Rust-extension dylib relocation issues. Completion scripts are generated at install time via `_ALPH_COMPLETE=source_<shell>` with leading-newline stripping. Formula includes a `caveats` block explaining `fpath` setup for zsh (including Oh My Zsh timing considerations).
+- **Homebrew tap**: `AlpheusCEF/homebrew-tap`, formula at v0.1.36. `brew tap AlpheusCEF/tap && brew install alph` installs `alph`, `alph-mcp` binaries, `man alph` man page, and zsh/bash/fish tab completion scripts. Formula uses `preserve_rpath` to avoid Rust-extension dylib relocation issues. Completion scripts are generated at install time via `_ALPH_COMPLETE=source_<shell>` with leading-newline stripping. Formula includes a `caveats` block explaining `fpath` setup for zsh (including Oh My Zsh timing considerations).
 - **GitHub Actions**: CI runs tests, mypy, ruff on every push/PR. Release workflow builds sdist and updates homebrew-tap formula automatically on tag.
 
 ### SKILL.md
 
-Installed at `~/.claude/skills/context-architect/SKILL.md`. Orients Claude to use the MCP tools rather than duplicating their logic.
+Installed at `~/.claude/skills/context-architect/SKILL.md`. Orients Claude to use the MCP tools rather than duplicating their logic. Includes hydration workflow: when `show_pool_node` returns `hydration_instructions`, follow them to resolve live node content. Generic fallback patterns for built-in content types. Does not hardcode registry-specific details.
 
 ### Demo Data
 
 `multi-pool-repo-example/` in the AlpheusCEF org: three pools (vehicles, appliances, remodeling), 28 nodes total, cross-pool `related_to` references demonstrated. `seed.py --wipe` regenerates cleanly. The `registry/` directory is gitignored on main; a GitHub Action workflow runs `seed.py` and commits the generated data to a `seeded` branch for RO testing. RO config entries use `branch: seeded` to read from that branch.
+
+### Registry-Scoped Hydration
+
+Live nodes point at external resources but don't carry instructions for how to fetch them. **Hydration** is the process of resolving a live node to its current content. This is inherently registry-scoped — the same `gdoc` content type may require different auth, workspace, or MCP server depending on which registry owns the node.
+
+**Design: three-layer resolution**
+
+```
+┌──────────────────────────────────────────────┐
+│  SKILL.md (ships with alph, user-level)      │
+│  Generic patterns + built-in type defaults   │
+├──────────────────────────────────────────────┤
+│  Registry root: hydration.yaml               │
+│  - Override built-in type resolution         │
+│  - Define custom types + their resolution    │
+│  - All registry-scoped, not org-assumed      │
+├──────────────────────────────────────────────┤
+│  Node meta                                   │
+│  Per-resource identifiers (url, doc_id, etc) │
+└──────────────────────────────────────────────┘
+```
+
+**`hydration.yaml`** lives at registry root (alongside pool directories). Example:
+
+```yaml
+# hydration.yaml — spp registry
+types:
+  gdoc:
+    provider: google-docs-mcp
+    instructions: "Use the Google Docs MCP server to fetch document content. Authenticate via workspace SSO."
+  confluence:
+    provider: atlassian-mcp
+    base_url: https://life360.atlassian.net
+    instructions: "Use the Atlassian MCP server. Pages are in the life360 Confluence instance."
+  jira:
+    provider: atlassian-mcp
+    base_url: https://life360.atlassian.net
+    instructions: "Use the Atlassian MCP server to fetch issue details from life360 Jira."
+  slack:
+    provider: slack-mcp
+    instructions: "Use the Slack MCP server. Channel name is in meta.channel."
+```
+
+**Key properties:**
+- A registry without `hydration.yaml` still works — SKILL.md provides generic fallback instructions, and nodes carry URLs in meta for manual resolution
+- Registries can define content types beyond the built-in set (e.g. `notion`, `linear`, `internal-wiki`) — the type is valid if the registry declares it
+- The `instructions` field is what gets surfaced to the LLM during node resolution — it's the registry-specific "how to hydrate this type"
+- `provider` is a hint for which MCP server to use; the SKILL.md maps provider names to tool names
+- Pool-level overrides are not planned — if needed later, a pool could carry its own `hydration.yaml` that merges with the registry's
+
+**Implications for content_type validation:**
+- Built-in types are validated strictly (meta requirements enforced)
+- Custom types declared in `hydration.yaml` pass validation with no meta requirements (the registry author defines what's needed via `instructions`)
+- Unknown types not in built-ins AND not declared by the registry fail validation
 
 ### What Remains Unbuilt
 
