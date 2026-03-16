@@ -2,8 +2,8 @@
 
 What was planned, what was built, and the key decisions that shaped each phase.
 
-**Released version**: v0.1.40 (Homebrew)
-**Test count**: 488 passing, mypy strict clean, ruff clean
+**Released version**: v0.1.41 (Homebrew)
+**Test count**: 505 passing, mypy strict clean, ruff clean
 
 ---
 
@@ -149,6 +149,26 @@ Per-pool cache of hydrated live node content. Deterministic CLI for cache operat
 - TTL defaults to 4h when no barrel config exists; registries override per content type
 - Symlink install for SKILL.md — brew share path is version-independent, survives upgrades
 - `alph skill install` is one-time; `alph skill status` warns on stale copies
+
+---
+
+## Search — Finding Content (v0.1.41)
+
+Two-tier keyword search across node content and cached hydrated content.
+
+### What shipped
+
+- **Core functions** (`core.py`): `SearchResult` frozen dataclass, `search_nodes()` (frontmatter + body), `search_barrel()` (cached hydrated content), shared `_search_file()` helper
+- **CLI**: `alph search "query"` (shallow, node-level), `alph b search "query"` (deep, barrel cache)
+- **MCP tools**: `search_pool_nodes`, `search_pool_barrel` — both read-only, idempotent, return node IDs with context and matching excerpts
+- **SKILL.md**: Search section with usage examples, tool table updated
+
+### Design decisions
+
+- Case-insensitive matching across all searchable fields (context, tags, meta values, body, cached content)
+- No indexing or embeddings — structured grep over markdown files. Simple, deterministic, no dependencies.
+- Two tiers by design: shallow (always available, node files) vs. deep (requires barrel cache to exist)
+- Excerpts capped at 5 per result in MCP responses to avoid token bloat
 
 ---
 
