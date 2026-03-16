@@ -127,6 +127,31 @@ Resolving live nodes to their current content — registry-scoped because the sa
 
 ---
 
+## Barrel — Hydration Cache (v0.1.37+)
+
+Per-pool cache of hydrated live node content. Deterministic CLI for cache operations so Claude doesn't need to manage files or do TTL math.
+
+### What shipped
+
+- **Data types** (`core.py`): `BarrelEntry`, `BarrelStatus`, `BarrelMeta`, `BarrelConfig`, `BarrelTypeConfig` frozen dataclasses
+- **Core functions** (`core.py`): `barrel_write`, `barrel_check` (TTL comparison), `barrel_status`, `barrel_invalidate`, `barrel_flush`, `barrel_new` (timeline — what's changed since last read), `barrel_mark_read`, `barrel_export` (md/json/yaml), `load_barrel_config`
+- **TTL parsing**: `_parse_ttl()` handles `4h`, `30m`, `1d`, `forever`
+- **CLI** (`cli.py`): `alph barrel` subcommand (aliases: `bar`, `b`) with: status, check, write, invalidate, flush, new, mark-read, export
+- **Registry init**: `init_registry()` creates starter `hydration.yaml` with barrel defaults for local registries
+- **SKILL.md**: Updated with barrel CLI usage, defaults (always on, 4h TTL), hydration workflow with cache, context queries, temporal reasoning, hydration failure handling
+- **Skill management** (`cli.py`): `alph skill install` creates symlink from `~/.claude/skills/context-architect/SKILL.md` to `share/alph/SKILL.md` (auto-updates on brew upgrade). `alph skill status` checks install state.
+- **Homebrew**: Formula installs SKILL.md to `share/alph/`, caveats mention `alph skill install`
+
+### Design decisions
+
+- Barrel is always on — no enable/disable toggle. Every hydration caches, every read checks cache first.
+- Cache per pool (`<pool>/barrel/`), config per registry (`hydration.yaml → barrel`)
+- TTL defaults to 4h when no barrel config exists; registries override per content type
+- Symlink install for SKILL.md — brew share path is version-independent, survives upgrades
+- `alph skill install` is one-time; `alph skill status` warns on stale copies
+
+---
+
 ## fin-cli: Task Management over alph
 
 `fin` reimplements the battle-tested fin task CLI on top of alph as a library. Tasks are snapshot nodes with `content_type: task`. Published to Homebrew as v0.1.0.
