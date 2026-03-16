@@ -2,6 +2,20 @@
 
 Design documentation for the Alpheus Context Engine Framework.
 
+## Quickstart
+
+```bash
+brew tap AlpheusCEF/tap
+brew install alph
+alph skill install         # Claude Code skill + MCP server config
+alph registry init --pool-home ~/my-context --id my-reg --context "My stuff"
+alph add -c "First node"   # creator auto-detected from system username
+```
+
+After `alph skill install`, Claude Code can use alph via MCP tools and
+knows how to hydrate live nodes, manage the barrel cache, and synthesize
+answers from pool content.
+
 ## Docs
 
 - [STATE.md](STATE.md) — full design and current status
