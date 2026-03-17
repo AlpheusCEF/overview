@@ -18,15 +18,6 @@ Barrel shipped in v0.1.37-v0.1.40. Search shipped in v0.1.41. Gateway is the las
 
 ## Near Term: Known Needs
 
-### `alph freeze <id>` — live-to-snapshot conversion
-
-Convert a live node to a snapshot by capturing hydrated content as the body and moving the file from `live/` to `snapshots/`. Triggered when a live resource reaches a final state (Jira ticket closed, design doc approved, Slack thread concluded, resource deleted).
-
-- `alph freeze <id>` — hydrate the node, write content as body, move `live/<id>.md` to `snapshots/<id>.md`, update `node_type` in frontmatter
-- `alph freeze <id> --content <file>` — use provided content instead of re-hydrating
-- MCP: `freeze_pool_node` tool for Claude-driven freezing
-- SKILL.md already instructs Claude to detect freeze signals during hydration and suggest freezing
-
 ### Lightweight task views in alph
 
 Rather than building task awareness only in fin-cli, a lightweight `alph task` subcommand:
