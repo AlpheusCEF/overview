@@ -2,8 +2,8 @@
 
 What was planned, what was built, and the key decisions that shaped each phase.
 
-**Released version**: v0.1.41 (Homebrew)
-**Test count**: 505 passing, mypy strict clean, ruff clean
+**Released version**: v0.1.42 (Homebrew)
+**Test count**: 511 passing, mypy strict clean, ruff clean
 
 ---
 
@@ -152,7 +152,7 @@ Per-pool cache of hydrated live node content. Deterministic CLI for cache operat
 
 ---
 
-## Search — Finding Content (v0.1.41)
+## Search — Finding Content (v0.1.42)
 
 Two-tier keyword search across node content and cached hydrated content.
 

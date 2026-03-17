@@ -316,7 +316,7 @@ Python 3.12+, Poetry for dependency management, FastMCP 3.x for the MCP server l
 
 ## What Has Been Built
 
-Phase 1, Phase 2, remote registry support, content_type system, update_node, registry-scoped hydration, barrel (hydration cache), search, skill management, and MCP auto-config are complete. Released version is v0.1.41 (Homebrew). Latest additions: two-tier search (`alph search` + `alph b search`), search MCP tools (`search_pool_nodes`, `search_pool_barrel`), barrel CLI (`alph barrel`/`bar`/`b`), `alph skill install` (SKILL.md symlink + MCP server config), creator defaults to system username, starter `hydration.yaml` on registry init.
+Phase 1, Phase 2, remote registry support, content_type system, update_node, registry-scoped hydration, barrel (hydration cache), search, skill management, and MCP auto-config are complete. Released version is v0.1.42 (Homebrew). Latest additions: two-tier search (`alph search` + `alph b search`), search MCP tools (`search_pool_nodes`, `search_pool_barrel`), barrel CLI (`alph barrel`/`bar`/`b`), `alph skill install` (SKILL.md symlink + MCP server config), creator defaults to system username, starter `hydration.yaml` on registry init.
 
 ### Core Engine (`alph-cli` repo, `src/alph/`)
 
@@ -328,11 +328,11 @@ Phase 1, Phase 2, remote registry support, content_type system, update_node, reg
 
 ### Test Suite
 
-505 tests passing. Full TDD — every production function written test-first. mypy strict clean, ruff clean.
+511 tests passing. Full TDD — every production function written test-first. mypy strict clean, ruff clean.
 
 ### Distribution
 
-- **Homebrew tap**: `AlpheusCEF/homebrew-tap`, formula at v0.1.41. `brew tap AlpheusCEF/tap && brew install alph` installs `alph`, `alph-mcp` binaries, `man alph` man page, SKILL.md to `share/alph/`, and zsh/bash/fish tab completion scripts. After install, `alph skill install` creates the SKILL.md symlink and configures the MCP server. Formula uses `preserve_rpath` to avoid Rust-extension dylib relocation issues. Completion scripts are generated at install time via `_ALPH_COMPLETE=source_<shell>` with leading-newline stripping.
+- **Homebrew tap**: `AlpheusCEF/homebrew-tap`, formula at v0.1.42. `brew tap AlpheusCEF/tap && brew install alph` installs `alph`, `alph-mcp` binaries, `man alph` man page, SKILL.md to `share/alph/`, and zsh/bash/fish tab completion scripts. After install, `alph skill install` creates the SKILL.md symlink and configures the MCP server. Formula uses `preserve_rpath` to avoid Rust-extension dylib relocation issues. Completion scripts are generated at install time via `_ALPH_COMPLETE=source_<shell>` with leading-newline stripping.
 - **GitHub Actions**: CI runs tests, mypy, ruff on every push/PR. Release workflow builds sdist and updates homebrew-tap formula automatically on tag.
 
 ### SKILL.md
